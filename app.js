@@ -1067,7 +1067,8 @@
       res.forEach(f => zip.file(f.fn, f.content));
       const b = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a"); 
-      a.href = URL.createObjectURL(b); a.download = "export_cstl.zip"; a.click();
+      a.href = URL.createObjectURL(b); const safeName = state.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'export';
+      a.download = `${safeName}_export.zip`; a.click();
     } else {
       res.forEach(f => {
         const b = new Blob([f.content], { type: "application/json" });
