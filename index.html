@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Copas Tool (CSTL)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div id="dashboardView" class="dashboard-shell open">
+    <header class="dashboard-header">
+      <div class="header-titles">
+        <h1 class="dashboard-title">Copas Tool <span>(CSTL)</span></h1>
+        <p class="hint">Version 4</p>
+      </div>
+      <div class="actions">
+        <button id="btnNewProject" class="btn btn-primary">Buat Proyek Baru</button>
+        <button id="btnRestoreProject" class="btn btn-outline">Pulihkan Proyek</button>
+      </div>
+    </header>
+    <main class="dashboard-content">
+      <div class="section-label" style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 20px;">Proyek Tersimpan</div>
+      <div id="projectList" class="project-grid"></div>
+    </main>
+  </div>
+
+  <div id="workspaceView" class="app-shell" style="display: none;">
+    <header class="toolbar">
+      <div class="toolbar-scroll">
+        <button id="btnBackToDashboard" class="btn btn-outline"><- Dashboard</button>
+        <span class="toolbar-sep"></span>
+        <button id="btnImportFile" class="btn">Impor File</button>
+        <button id="btnImportFolder" class="btn">Impor Folder</button>
+        <button id="btnImportZip" class="btn">Impor ZIP</button>
+        <button id="btnExport" class="btn" disabled>Ekspor</button>
+        <span class="toolbar-sep"></span>
+        <button id="btnProofread" class="btn" disabled>Cari</button>
+        <button id="btnSettings" class="btn">Setting</button>
+      </div>
+      <span class="grow"></span>
+      <span id="projectNameDisplay" class="toolbar-label desktop-only" style="margin-right: 12px; color: var(--text);">Proyek Aktif</span>
+    </header>
+
+    <main class="split-layout">
+      <section class="panel panel-left">
+        <div class="panel-header">
+          <h2 class="panel-title">Daftar Teks</h2>
+          <div class="progress-wrap">
+            <div class="progress-track">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <span id="progressText" class="mono">0/0</span>
+          </div>
+        </div>
+        <div id="previewViewport" class="preview-viewport">
+          <div id="previewContainer" class="preview-container"></div>
+        </div>
+      </section>
+
+      <section class="panel panel-right">
+        <h2 class="panel-title">Area Kerja Terjemahan</h2>
+        <div class="card-box mb-2">
+          <label class="section-label" style="margin-top:0;">Pilih Berdasarkan Range (Baris)</label>
+          <div class="flex-center gap-4 mb-2 wrap">
+            <input id="rangeFromInput" type="number" class="text-input grow" placeholder="Dari baris..." min="1" disabled />
+            <span style="color: var(--muted)">-</span>
+            <input id="rangeToInput" type="number" class="text-input grow" placeholder="Sampai baris..." min="1" disabled />
+            <button id="btnSelectRange" class="btn btn-outline" disabled>Centang</button>
+          </div>
+          <div class="flex-center gap-4 mb-2 wrap">
+            <button id="btnSelectAll" class="btn btn-outline grow" disabled>Pilih Semua</button>
+            <button id="btnClearSelection" class="btn btn-outline grow" disabled>Hapus Pilihan</button>
+          </div>
+          <button id="btnCopyForAi" class="btn btn-primary w-full" disabled>Copy <span id="copyCount">0</span> Baris untuk AI</button>
+        </div>
+        <div id="copyStatus" class="status-toast empty"></div>
+
+        <label class="section-label" for="pasteArea">Paste hasil terjemahan AI di sini</label>
+        <textarea id="pasteArea" class="mono input-area" placeholder="Paste hasil dari AI di sini..." disabled></textarea>
+
+        <div class="inline-actions">
+          <button id="btnApply" class="btn btn-success grow" disabled>Terapkan Terjemahan</button>
+          <button id="btnUndo" class="btn btn-danger" disabled>Undo</button>
+        </div>
+
+        <label class="section-label mt-3">Daftar Nama Karakter</label>
+        <p class="hint mb-2" style="margin-top: -4px;">Klik pada baris nama untuk langsung menyalin teks ke clipboard.</p>
+        <div id="nameTableWrap" class="name-table-wrap">
+          <table class="name-table">
+            <thead>
+              <tr>
+                <th>Nama Karakter</th>
+              </tr>
+            </thead>
+            <tbody id="nameTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer id="statusBar" class="status-bar">
+      File: - | Baris: 0 | Diterjemahkan: 0/0 (0%)
+    </footer>
+  </div>
+
+  <input id="importFileInput" type="file" accept=".json" multiple hidden />
+  <input id="importFolderInput" type="file" accept=".json" webkitdirectory directory multiple hidden />
+  <input id="importZipInput" type="file" accept=".zip" hidden />
+  <input id="restoreProjectInput" type="file" accept=".cstl" hidden />
+
+  <div id="settingsModal" class="modal-backdrop">
+    <div class="modal modal-wide">
+      <h3>Pengaturan & Data</h3>
+      <div class="mt-2">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label class="section-label" style="margin: 0; color: var(--text);">Pengaturan Prompt AI</label>
+          <button id="btnSettingsReset" class="btn btn-outline" style="padding: 4px 8px; font-size: 11px;">Reset Default</button>
+        </div>
+        <p class="hint" style="margin-top: 0;">Teks instruksi ini akan otomatis ditambahkan ke awal saat kamu klik "Copy untuk AI".</p>
+        <textarea id="settingsPromptInput" class="mono input-area"></textarea>
+      </div>
+      <div class="modal-actions mt-3">
+        <span class="grow"></span>
+        <button id="btnSettingsCancel" class="btn">Batal</button>
+        <button id="btnSettingsSave" class="btn btn-primary">Simpan Prompt</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="lineEditorModal" class="modal-backdrop">
+    <div class="modal modal-wide">
+      <h3 id="lineEditorTitle">Edit Terjemahan</h3>
+      <label class="section-label">Teks Asli</label>
+      <textarea id="lineOriginalView" class="mono input-area small" readonly></textarea>
+      <div id="lineNameWrap">
+        <label class="section-label mt-2">Nama Karakter (Terjemahan)</label>
+        <input id="lineNameInput" class="mono text-input w-full" type="text" />
+      </div>
+      <label class="section-label mt-2">Terjemahan (Bisa di-replace)</label>
+      <textarea id="lineMessageInput" class="mono input-area"></textarea>
+      <label class="checkbox-line mt-2">
+        <input id="lineTranslatedCheck" type="checkbox" />
+        Tandai sebagai sudah diterjemahkan
+      </label>
+      <div class="modal-actions">
+        <span class="grow"></span>
+        <button id="btnLineCancel" class="btn">Batal</button>
+        <button id="btnLineSave" class="btn btn-primary">Simpan Perubahan</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="proofreadModal" class="modal-backdrop">
+    <div class="modal modal-xl">
+      <h3>Cari & Replace</h3>
+      <div class="card-box mb-2">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <label for="proofreadSearchInput" style="font-size: 13px; font-weight: 600; color: var(--text);">Cari:</label>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <input id="proofreadSearchInput" class="mono text-input grow" style="min-width: 200px;" type="text" placeholder="Ketik kata atau pola regex..." />
+            <div class="proofread-filters" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <select id="proofreadScope" class="text-input" style="height: 28px; padding: 0 8px; font-size: 12px;">
+                <option value="all">All Text</option>
+                <option value="name">Name Only</option>
+                <option value="message">Message Only</option>
+              </select>
+              <label class="checkbox-line"><input id="proofreadRegexCheck" type="checkbox" />Regex</label>
+              <label class="checkbox-line"><input id="proofreadCaseCheck" type="checkbox" />Case Sensitive</label>
+              <label class="checkbox-line"><input id="proofreadExactCheck" type="checkbox" />Exact Match</label>
+              <label class="checkbox-line"><input id="proofreadTranslatedOnlyCheck" type="checkbox" checked />Translated Only</label>
+            </div>
+            <button id="btnProofreadReset" class="btn">Reset</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-box mb-2">
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <label for="proofreadReplaceInput" style="font-size: 13px; font-weight: 600; color: var(--text);">Ganti dengan:</label>
+          <input id="proofreadReplaceInput" class="mono text-input w-full" type="text" placeholder="Teks pengganti untuk Replace All..." />
+          <div class="flex-center">
+            <button id="btnProofreadReplaceAll" class="btn btn-success" style="padding: 6px 24px;">Replace All</button>
+          </div>
+        </div>
+      </div>
+      <p id="proofreadStatus" class="hint mt-2"></p>
+      <div class="proofread-results-wrap mt-2">
+        <div id="proofreadContainer" class="preview-container"></div>
+      </div>
+      <div class="modal-actions">
+        <span class="grow"></span>
+        <button id="btnProofreadClose" class="btn btn-primary">Tutup</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
