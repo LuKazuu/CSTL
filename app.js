@@ -32,7 +32,7 @@
     bindEvents();
     
     if (!navigator.storage || !navigator.storage.getDirectory) {
-      alert("Browser kamu tidak mendukung Sistem File OPFS (Atau situs ini tidak berjalan di localhost/HTTPS). Beberapa fitur tidak akan berjalan optimal.");
+      alert("Browser kamu tidak mendukung Sistem File OPFS. Beberapa fitur tidak akan berjalan optimal.");
     }
 
     await loadDashboardProjects();
@@ -646,30 +646,60 @@
       let maxExistingLineNum = state.lines.length > 0 ? Math.max(...state.lines.map(l => l.line_num)) : 0;
       cur = maxExistingLineNum + 1;
       
+      const existingFiles = new Set(state.importedFiles);
+      const skippedFiles = [];
+
       if (isZip && filesObj instanceof File && window.JSZip) {
         const zip = await window.JSZip.loadAsync(filesObj);
         const names = Object.keys(zip.files).filter(n => n.endsWith(".json")).sort();
         for (const n of names) {
+          const baseName = normalizeFileBaseName(n);
+          if (existingFiles.has(baseName)) {
+            skippedFiles.push(baseName);
+            continue;
+          }
           const jsonContent = JSON.parse(decodeArrayBuffer(await zip.file(n).async("uint8array")));
-          const p = parseJsonEntries(jsonContent, normalizeFileBaseName(n), cur);
-          if (p.length) { fNames.push(normalizeFileBaseName(n)); lines.push(...p); cur += p.length; }
+          const p = parseJsonEntries(jsonContent, baseName, cur);
+          if (p.length) { 
+            fNames.push(baseName); 
+            existingFiles.add(baseName);
+            lines.push(...p); 
+            cur += p.length; 
+          }
         }
       } else {
         const files = Array.from(filesObj)
           .filter(f => f.name.endsWith(".json"))
           .sort((a,b) => a.name.localeCompare(b.name));
         for (const f of files) {
-          const p = parseJsonEntries(await parseJsonFromFileObject(f), normalizeFileBaseName(f.name), cur);
-          if (p.length) { fNames.push(normalizeFileBaseName(f.name)); lines.push(...p); cur += p.length; }
+          const baseName = normalizeFileBaseName(f.name);
+          if (existingFiles.has(baseName)) {
+            skippedFiles.push(baseName);
+            continue;
+          }
+          const p = parseJsonEntries(await parseJsonFromFileObject(f), baseName, cur);
+          if (p.length) { 
+            fNames.push(baseName); 
+            existingFiles.add(baseName);
+            lines.push(...p); 
+            cur += p.length; 
+          }
         }
       }
       
       if (lines.length > 0) {
         state.lines = [...state.lines, ...lines];
-        state.importedFiles = Array.from(new Set([...state.importedFiles, ...fNames]));
+        state.importedFiles = Array.from(existingFiles);
         refreshAll();
         queueAutoSave();
-        flashHint(`Berhasil impor ${lines.length} baris.`);
+        
+        let msg = `Berhasil impor ${lines.length} baris.`;
+        if (skippedFiles.length > 0) {
+          msg += ` (${skippedFiles.length} file duplikat diabaikan)`;
+        }
+        flashHint(msg);
+      } else if (skippedFiles.length > 0) {
+        alert(`Gagal impor: File yang dipilih sudah ada di dalam proyek.\n\nFile duplikat:\n- ${skippedFiles.slice(0, 5).join('\n- ')}${skippedFiles.length > 5 ? '\n...dan lainnya' : ''}`);
       }
     } catch (err) { alert(err.message); }
   }

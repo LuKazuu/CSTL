@@ -55,7 +55,6 @@ html, body {
   padding-top: 12px; padding-bottom: 36px; margin-bottom: 32px;
 }
 .dashboard-title { margin: 0 0 6px 0; font-size: 32px; font-weight: 700; color: var(--text); letter-spacing: -0.5px;}
-.dashboard-title span { color: var(--primary); }
 .dashboard-header .hint { margin: 0; font-size: 15px; }
 .dashboard-header .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .dashboard-content { flex: 1; max-width: 1400px; margin: 0 auto; width: 100%; }
