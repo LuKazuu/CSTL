@@ -776,15 +776,13 @@
           msg += ` (${skippedFiles.length} file duplikat diabaikan)`;
         }
         flashHint(msg);
-      } else if (skippedFiles.length > 0) {
-        flashHint("Gagal impor: File sudah ada.");
+            } else if (skippedFiles.length > 0) {
         alert(`Gagal impor: File yang dipilih sudah ada di dalam proyek.\n\nFile duplikat:\n- ${skippedFiles.slice(0, 5).join('\n- ')}${skippedFiles.length > 5 ? '\n...dan lainnya' : ''}`);
       } else {
         flashHint("Tidak ada data valid yang diimpor.", false);
       }
-    } catch (err) { 
-      flashHint("Terjadi kesalahan saat mengimpor.");
-      alert(err.message); 
+    } catch (err) {
+      alert(`Terjadi kesalahan saat mengimpor:\n${err.message}`); 
     } finally {
       document.body.style.cursor = "default";
     }
