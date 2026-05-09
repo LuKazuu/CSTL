@@ -776,7 +776,7 @@
           msg += ` (${skippedFiles.length} file duplikat diabaikan)`;
         }
         flashHint(msg);
-            } else if (skippedFiles.length > 0) {
+      } else if (skippedFiles.length > 0) {
         alert(`Gagal impor: File yang dipilih sudah ada di dalam proyek.\n\nFile duplikat:\n- ${skippedFiles.slice(0, 5).join('\n- ')}${skippedFiles.length > 5 ? '\n...dan lainnya' : ''}`);
       } else {
         flashHint("Tidak ada data valid yang diimpor.", false);
