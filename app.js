@@ -5,30 +5,99 @@
 
   const APP_VERSION = 4;
   const PROJECT_EXT = ".cstl";
-  const PREVIEW_CHUNK_SIZE = 100;
-  const PROOFREAD_CHUNK_SIZE = 100;
 
   const state = {
     currentProjectId: null,
     projectName: "",
-    lines: [], 
-    importedFiles: [], 
-    aiInstructionHeader: DEFAULT_PROMPT_HEADER, 
+    lines: [],
+    importedFiles: [],
+    aiInstructionHeader: DEFAULT_PROMPT_HEADER,
     undoSnapshot: null,
     selectedLines: new Set(),
-    displayRows: [], 
+    displayRows: [],
     lineByNum: new Map(),
-    previewRenderCount: 0,
-    proofreadMatches: [], 
-    proofreadRenderCount: 0,
+    proofreadMatches: [],
   };
 
   const ui = {};
   let activeLineEditorLineNum = null;
   let saveTimeout = null;
+  let mainScroller = null;
+  let proofreadScroller = null;
+  let hintToken = 0;
+
+  class VirtualScroller {
+    constructor(viewport, container, estimatedHeight, renderItem) {
+      this.viewport = viewport;
+      this.container = container;
+      this.estimatedHeight = estimatedHeight;
+      this.renderItem = renderItem;
+      this.items = [];
+      this.scrollTop = 0;
+      this.onScroll = this.onScroll.bind(this);
+      this.viewport.addEventListener('scroll', this.onScroll, { passive: true });
+      if (window.ResizeObserver) {
+        new ResizeObserver(() => this.render()).observe(this.viewport);
+      }
+    }
+
+    setItems(items) {
+      this.items = items;
+      this.scrollTop = this.viewport.scrollTop = 0;
+      this.render();
+    }
+
+    scrollToIndex(index) {
+      this.viewport.scrollTop = index * this.estimatedHeight;
+      this.scrollTop = this.viewport.scrollTop;
+      this.render();
+    }
+
+    onScroll() {
+      this.scrollTop = this.viewport.scrollTop;
+      this.render();
+    }
+
+    render() {
+      const viewportHeight = this.viewport.clientHeight || 800;
+      const total = this.items.length;
+      
+      if (!total) {
+        this.container.innerHTML = "";
+        return;
+      }
+
+      const buffer = 15;
+      let start = Math.floor(this.scrollTop / this.estimatedHeight) - buffer;
+      start = Math.max(0, start);
+      
+      let end = Math.ceil((this.scrollTop + viewportHeight) / this.estimatedHeight) + buffer;
+      end = Math.min(total, end);
+
+      const topPad = start * this.estimatedHeight;
+      const bottomPad = (total - end) * this.estimatedHeight;
+
+      this.container.innerHTML = "";
+      
+      const topSpacer = document.createElement("div");
+      topSpacer.style.height = `${topPad}px`;
+      this.container.appendChild(topSpacer);
+
+      const frag = document.createDocumentFragment();
+      for (let i = start; i < end; i++) {
+        frag.appendChild(this.renderItem(this.items[i]));
+      }
+      this.container.appendChild(frag);
+
+      const bottomSpacer = document.createElement("div");
+      bottomSpacer.style.height = `${bottomPad}px`;
+      this.container.appendChild(bottomSpacer);
+    }
+  }
 
   document.addEventListener("DOMContentLoaded", async () => {
     cacheElements();
+    initScrollers();
     bindEvents();
     
     if (!navigator.storage || !navigator.storage.getDirectory) {
@@ -62,6 +131,12 @@
     for (const id of ids) {
       ui[id] = document.getElementById(id);
     }
+  }
+
+  function initScrollers() {
+    mainScroller = new VirtualScroller(ui.previewViewport, ui.previewContainer, 85, renderMainRow);
+    const proofreadViewport = ui.proofreadContainer.closest('.proofread-results-wrap');
+    proofreadScroller = new VirtualScroller(proofreadViewport, ui.proofreadContainer, 90, renderProofreadRow);
   }
 
   function bindEvents() {
@@ -107,22 +182,27 @@
         if (l && !isTranslated(l)) state.selectedLines.add(i);
       }
       syncCheckboxUI();
-    });
 
-    ui.previewViewport.addEventListener("scroll", () => {
-      if (ui.previewViewport.scrollTop + ui.previewViewport.clientHeight >= ui.previewViewport.scrollHeight - 200) {
-        renderMorePreviewRows();
+      const targetIndex = state.displayRows.findIndex(row => row.type === "line" && row.line.line_num === f);
+      
+      if (targetIndex !== -1) {
+        mainScroller.scrollToIndex(targetIndex);
+        
+        setTimeout(() => {
+          const targetEl = document.querySelector(`input[data-num="${f}"]`);
+          if (targetEl) {
+            const rowEl = targetEl.closest('.preview-row');
+            rowEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            const originalBg = rowEl.style.backgroundColor;
+            rowEl.style.transition = "background-color 0.3s ease";
+            rowEl.style.backgroundColor = "rgba(59, 130, 246, 0.4)";
+            setTimeout(() => {
+              rowEl.style.backgroundColor = originalBg;
+            }, 800);
+          }
+        }, 50);
       }
-    }, { passive: true });
-    
-    const proofreadWrap = ui.proofreadContainer.closest('.proofread-results-wrap');
-    if (proofreadWrap) {
-      proofreadWrap.addEventListener("scroll", () => {
-        if (proofreadWrap.scrollTop + proofreadWrap.clientHeight >= proofreadWrap.scrollHeight - 100) {
-          renderMoreProofreadRows();
-        }
-      }, { passive: true });
-    }
+    });
 
     ui.btnSettings.addEventListener("click", onOpenSettings);
     ui.btnSettingsReset.addEventListener("click", () => ui.settingsPromptInput.value = DEFAULT_PROMPT_HEADER);
@@ -470,101 +550,87 @@
   }
 
   function renderPreviewRows() {
-    ui.previewContainer.textContent = "";
-    state.previewRenderCount = 0;
-    if (!state.displayRows.length) return updateButtonStates();
-    renderMorePreviewRows();
+    mainScroller.setItems(state.displayRows);
+    updateButtonStates();
   }
 
-  function renderMorePreviewRows() {
-    if (state.previewRenderCount >= state.displayRows.length) return;
+  function renderMainRow(rowData) {
+    const row = document.createElement("div");
+    row.className = "preview-row";
     
-    const end = Math.min(state.previewRenderCount + PREVIEW_CHUNK_SIZE, state.displayRows.length);
-    const frag = document.createDocumentFragment();
-    
-    for (let i = state.previewRenderCount; i < end; i++) {
-      const rowData = state.displayRows[i];
-      const row = document.createElement("div");
-      row.className = "preview-row";
+    if (rowData.type === "separator") {
+      row.classList.add("separator");
+      const fileLines = state.lines.filter(l => l.file === rowData.file && !isTranslated(l));
+      const isAllSelected = fileLines.length > 0 && fileLines.every(l => state.selectedLines.has(l.line_num));
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.dataset.file = rowData.file;
+      cb.checked = isAllSelected;
+      cb.addEventListener("change", (e) => {
+        const isChecked = e.target.checked;
+        fileLines.forEach(l => {
+          if (isChecked) state.selectedLines.add(l.line_num);
+          else state.selectedLines.delete(l.line_num);
+        });
+        syncCheckboxUI();
+      });
+
+      const label = document.createElement("div"); 
+      label.className = "mono grow";
+      label.style.fontWeight = "700"; 
+      label.style.color = "var(--primary)";
+      label.textContent = `File: ${rowData.file}`;
       
-      if (rowData.type === "separator") {
-        row.classList.add("separator");
-        
-        const fileLines = state.lines.filter(l => l.file === rowData.file && !isTranslated(l));
-        const isAllSelected = fileLines.length > 0 && fileLines.every(l => state.selectedLines.has(l.line_num));
+      row.append(cb, label);
+    } else {
+      const line = rowData.line;
+      if (isTranslated(line)) row.classList.add("row-translated");
+      
+      const isChecked = state.selectedLines.has(line.line_num);
+      if (isChecked) row.classList.add('row-selected');
+      
+      const cbWrap = document.createElement("div");
+      cbWrap.className = "checkbox-cell";
+      
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.dataset.num = line.line_num;
+      cb.checked = isChecked;
+      if (isTranslated(line)) cb.disabled = true;
+      
+      cb.addEventListener("change", (e) => {
+        if (e.target.checked) state.selectedLines.add(line.line_num);
+        else state.selectedLines.delete(line.line_num);
+        syncCheckboxUI();
+      });
 
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.dataset.file = rowData.file;
-        cb.checked = isAllSelected;
-        cb.addEventListener("change", (e) => {
-          const isChecked = e.target.checked;
-          fileLines.forEach(l => {
-            if (isChecked) state.selectedLines.add(l.line_num);
-            else state.selectedLines.delete(l.line_num);
-          });
-          syncCheckboxUI();
-        });
-
-        const label = document.createElement("div"); 
-        label.className = "mono grow";
-        label.style.fontWeight = "700"; 
-        label.style.color = "var(--primary)";
-        label.textContent = `File: ${rowData.file}`;
-        
-        row.append(cb, label);
+      const contentWrap = document.createElement("div");
+      contentWrap.className = "text-content";
+      
+      const origDiv = document.createElement("div");
+      origDiv.className = "original";
+      const dName = line.name || "";
+      origDiv.textContent = dName ? `${line.line_num}. ${dName}: ${line.message}` : `${line.line_num}. ${line.message}`;
+      
+      const transDiv = document.createElement("div");
+      transDiv.className = "translated";
+      let tTxt = "——";
+      if (isTranslated(line)) {
+          const tName = line.trans_name || dName;
+          tTxt = tName ? `${line.line_num}. ${tName}: ${line.trans_message}` : `${line.line_num}. ${line.trans_message}`;
       } else {
-        const line = rowData.line;
-        if (isTranslated(line)) row.classList.add("row-translated");
-        
-        const isChecked = state.selectedLines.has(line.line_num);
-        if (isChecked) row.classList.add('row-selected');
-        
-        const cbWrap = document.createElement("div");
-        cbWrap.className = "checkbox-cell";
-        
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.dataset.num = line.line_num;
-        cb.checked = isChecked;
-        if (isTranslated(line)) cb.disabled = true;
-        
-        cb.addEventListener("change", (e) => {
-          if (e.target.checked) state.selectedLines.add(line.line_num);
-          else state.selectedLines.delete(line.line_num);
-          syncCheckboxUI();
-        });
-
-        const contentWrap = document.createElement("div");
-        contentWrap.className = "text-content";
-        
-        const origDiv = document.createElement("div");
-        origDiv.className = "original";
-        const dName = line.name || "";
-        origDiv.textContent = dName ? `${line.line_num}. ${dName}: ${line.message}` : `${line.line_num}. ${line.message}`;
-        
-        const transDiv = document.createElement("div");
-        transDiv.className = "translated";
-        let tTxt = "——";
-        if (isTranslated(line)) {
-            const tName = line.trans_name || dName;
-            tTxt = tName ? `${line.line_num}. ${tName}: ${line.trans_message}` : `${line.line_num}. ${line.trans_message}`;
-        } else {
-            transDiv.classList.add("cell-muted");
-        }
-        transDiv.textContent = tTxt;
-        
-        contentWrap.append(origDiv, transDiv);
-        cbWrap.append(cb, contentWrap);
-        row.appendChild(cbWrap);
-        
-        contentWrap.addEventListener("click", () => openLineEditor(line.line_num));
+          transDiv.classList.add("cell-muted");
       }
-      frag.appendChild(row);
+      transDiv.textContent = tTxt;
+      
+      contentWrap.append(origDiv, transDiv);
+      cbWrap.append(cb, contentWrap);
+      row.appendChild(cbWrap);
+      
+      contentWrap.addEventListener("click", () => openLineEditor(line.line_num));
     }
-    ui.previewContainer.appendChild(frag);
-    state.previewRenderCount = end;
-    updateButtonStates();
+    return row;
   }
 
   function syncCheckboxUI() {
@@ -631,16 +697,26 @@
     ui.btnUndo.disabled = !state.undoSnapshot; 
   }
 
-  function flashHint(msg) {
+  function flashHint(msg, keepAlive = false) {
     ui.copyStatus.textContent = msg; 
     ui.copyStatus.classList.remove("empty");
-    clearTimeout(ui.copyStatus.timeout);
-    ui.copyStatus.timeout = setTimeout(() => { 
-      ui.copyStatus.classList.add("empty"); 
-    }, 4000);
+    
+    const currentToken = ++hintToken;
+    if (!keepAlive) {
+      setTimeout(() => { 
+        if (hintToken === currentToken) {
+          ui.copyStatus.classList.add("empty"); 
+        }
+      }, 4000);
+    }
   }
 
   async function handleImportLogic(filesObj, isZip = false) {
+    flashHint("Memproses file... Mohon tunggu.", true);
+    document.body.style.cursor = "wait";
+    
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    
     try {
       let cur = 1, lines = [], fNames = [];
       let maxExistingLineNum = state.lines.length > 0 ? Math.max(...state.lines.map(l => l.line_num)) : 0;
@@ -666,6 +742,7 @@
             lines.push(...p); 
             cur += p.length; 
           }
+          await new Promise(r => setTimeout(r, 0));
         }
       } else {
         const files = Array.from(filesObj)
@@ -684,6 +761,7 @@
             lines.push(...p); 
             cur += p.length; 
           }
+          await new Promise(r => setTimeout(r, 0));
         }
       }
       
@@ -699,9 +777,17 @@
         }
         flashHint(msg);
       } else if (skippedFiles.length > 0) {
+        flashHint("Gagal impor: File sudah ada.");
         alert(`Gagal impor: File yang dipilih sudah ada di dalam proyek.\n\nFile duplikat:\n- ${skippedFiles.slice(0, 5).join('\n- ')}${skippedFiles.length > 5 ? '\n...dan lainnya' : ''}`);
+      } else {
+        flashHint("Tidak ada data valid yang diimpor.", false);
       }
-    } catch (err) { alert(err.message); }
+    } catch (err) { 
+      flashHint("Terjadi kesalahan saat mengimpor.");
+      alert(err.message); 
+    } finally {
+      document.body.style.cursor = "default";
+    }
   }
 
   async function onImportFileChange(ev) {
@@ -925,8 +1011,7 @@
       catch (e) { return; } 
     }
     
-    state.proofreadMatches = []; state.proofreadRenderCount = 0; 
-    ui.proofreadContainer.textContent = "";
+    state.proofreadMatches = [];
     
     for (const line of state.lines) {
       if (onlyTrans && !isTranslated(line)) continue;
@@ -954,13 +1039,14 @@
     }
     
     ui.proofreadStatus.textContent = `Ditemukan ${state.proofreadMatches.length} baris.`;
-    renderMoreProofreadRows();
+    proofreadScroller.setItems(state.proofreadMatches);
   }
 
-  function renderMoreProofreadRows() {
-    if (state.proofreadRenderCount >= state.proofreadMatches.length) return;
-    const end = Math.min(state.proofreadRenderCount + PROOFREAD_CHUNK_SIZE, state.proofreadMatches.length);
-    const frag = document.createDocumentFragment();
+  function renderProofreadRow(r) {
+    const row = document.createElement("div"); 
+    row.className = "preview-row";
+    const contentWrap = document.createElement("div"); 
+    contentWrap.className = "text-content";
     
     const query = ui.proofreadSearchInput.value; 
     const isRegex = ui.proofreadRegexCheck.checked; 
@@ -982,37 +1068,32 @@
       else wrap.appendChild(document.createTextNode(msg));
       return wrap;
     };
-
-    for (let i = state.proofreadRenderCount; i < end; i++) {
-      const r = state.proofreadMatches[i];
-      const row = document.createElement("div"); row.className = "preview-row";
-      const contentWrap = document.createElement("div"); contentWrap.className = "text-content";
-      
-      const fileMeta = document.createElement("div"); fileMeta.className = "file-meta";
-      fileMeta.textContent = `File: ${r.file} | Baris: ${r.num}`;
-      
-      const origDiv = document.createElement("div"); origDiv.className = "original";
-      const transDiv = document.createElement("div"); transDiv.className = "translated";
-      if (!r.isTrans) transDiv.classList.add("cell-muted");
-      
-      if (onlyTrans) {
-        origDiv.textContent = r.origName ? `${r.origName}: ${r.origMsg}` : r.origMsg;
-        if (r.isTrans) transDiv.appendChild(buildNodes(r.transName, r.transMsg, true));
-        else transDiv.textContent = "——";
-      } else {
-        origDiv.appendChild(buildNodes(r.origName, r.origMsg, true));
-        if (r.isTrans) transDiv.textContent = r.transName ? `${r.transName}: ${r.transMsg}` : r.transMsg;
-        else transDiv.textContent = "——";
-      }
-      
-      contentWrap.append(fileMeta, origDiv, transDiv);
-      row.appendChild(contentWrap);
-      contentWrap.addEventListener("click", () => openLineEditor(r.num));
-      frag.appendChild(row);
+    
+    const fileMeta = document.createElement("div"); 
+    fileMeta.className = "file-meta";
+    fileMeta.textContent = `File: ${r.file} | Baris: ${r.num}`;
+    
+    const origDiv = document.createElement("div"); 
+    origDiv.className = "original";
+    const transDiv = document.createElement("div"); 
+    transDiv.className = "translated";
+    if (!r.isTrans) transDiv.classList.add("cell-muted");
+    
+    if (onlyTrans) {
+      origDiv.textContent = r.origName ? `${r.origName}: ${r.origMsg}` : r.origMsg;
+      if (r.isTrans) transDiv.appendChild(buildNodes(r.transName, r.transMsg, true));
+      else transDiv.textContent = "——";
+    } else {
+      origDiv.appendChild(buildNodes(r.origName, r.origMsg, true));
+      if (r.isTrans) transDiv.textContent = r.transName ? `${r.transName}: ${r.transMsg}` : r.transMsg;
+      else transDiv.textContent = "——";
     }
     
-    ui.proofreadContainer.appendChild(frag);
-    state.proofreadRenderCount = end;
+    contentWrap.append(fileMeta, origDiv, transDiv);
+    row.appendChild(contentWrap);
+    contentWrap.addEventListener("click", () => openLineEditor(r.num));
+    
+    return row;
   }
 
   function onProofreadReplaceAll() {
@@ -1084,7 +1165,7 @@
       fn: `${fn}.json`, 
       content: JSON.stringify(lns.map(l => {
         const e = {}; 
-        e.name = isTranslated(l) ? l.trans_name : l.name;
+        e.name = isTranslated(l) ? (l.trans_name || l.name) : l.name;
         e.message = isTranslated(l) ? l.trans_message : l.message;
         if (e.name) e.name = e.name.replace(/\\n/g, "\n"); 
         if (e.message) e.message = e.message.replace(/\\n/g, "\n");
