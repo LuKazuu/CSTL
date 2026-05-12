@@ -2,7 +2,6 @@
   "use strict";
 
   const DEFAULT_PROMPT_HEADER = `Rewrite entire text to Native Indonesian. Do not change prefix number. Euphemism prohibited. Use of "Bahasa Jakarta Selatan" is prohibited. Put results inside plaintext block.`;
-
   const APP_VERSION = 4;
   const PROJECT_EXT = ".cstl";
 
@@ -61,7 +60,6 @@
     render() {
       const viewportHeight = this.viewport.clientHeight || 800;
       const total = this.items.length;
-      
       if (!total) {
         this.container.innerHTML = "";
         return;
@@ -70,7 +68,6 @@
       const buffer = 15;
       let start = Math.floor(this.scrollTop / this.estimatedHeight) - buffer;
       start = Math.max(0, start);
-      
       let end = Math.ceil((this.scrollTop + viewportHeight) / this.estimatedHeight) + buffer;
       end = Math.min(total, end);
 
@@ -78,7 +75,6 @@
       const bottomPad = (total - end) * this.estimatedHeight;
 
       this.container.innerHTML = "";
-      
       const topSpacer = document.createElement("div");
       topSpacer.style.height = `${topPad}px`;
       this.container.appendChild(topSpacer);
@@ -99,34 +95,27 @@
     cacheElements();
     initScrollers();
     bindEvents();
-    
     if (!navigator.storage || !navigator.storage.getDirectory) {
       alert("Browser kamu tidak mendukung Sistem File OPFS. Beberapa fitur tidak akan berjalan optimal.");
     }
-
     await loadDashboardProjects();
   });
 
   function cacheElements() {
     const ids = [
-      "dashboardView", "workspaceView", "projectList",
-      "btnNewProject", "btnRestoreProject", "btnBackToDashboard",
-      "projectNameDisplay", "restoreProjectInput",
-      "btnImportFile", "btnImportFolder", "btnImportZip", "btnExport",
-      "btnProofread", "btnSettings",
-      "previewViewport", "previewContainer", "progressFill", "progressText",
-      "btnSelectAll", "btnClearSelection", "copyCount",
-      "btnCopyForAi", "copyStatus", "pasteArea", "btnApply", "btnUndo",
-      "nameTableBody", "statusBar",
-      "importFileInput", "importFolderInput", "importZipInput",
-      "settingsModal", "settingsPromptInput", "btnSettingsReset", "btnSettingsCancel", "btnSettingsSave",
-      "lineEditorModal", "lineEditorTitle", "lineOriginalView",
-      "lineNameWrap", "lineNameInput", "lineMessageInput", "lineTranslatedCheck",
-      "btnLineCancel", "btnLineSave",
-      "proofreadModal", "proofreadSearchInput", "proofreadScope", "proofreadRegexCheck", "proofreadCaseCheck",
-      "proofreadExactCheck", "proofreadTranslatedOnlyCheck", "btnProofreadReset", "proofreadStatus", "proofreadContainer", "btnProofreadClose",
-      "proofreadReplaceInput", "btnProofreadReplaceAll",
-      "rangeFromInput", "rangeToInput", "btnSelectRange"
+      "dashboardView", "workspaceView", "projectList", "btnNewProject", "btnRestoreProject",
+      "btnBackToDashboard", "projectNameDisplay", "restoreProjectInput", "btnImportFile",
+      "btnImportFolder", "btnImportZip", "btnExport", "btnProofread", "btnSettings",
+      "previewViewport", "previewContainer", "progressFill", "progressText", "btnSelectAll",
+      "btnClearSelection", "copyCount", "btnCopyForAi", "copyStatus", "pasteArea", "btnApply",
+      "btnUndo", "nameTableBody", "statusBar", "importFileInput", "importFolderInput",
+      "importZipInput", "settingsModal", "settingsPromptInput", "btnSettingsReset",
+      "btnSettingsCancel", "btnSettingsSave", "lineEditorModal", "lineEditorTitle",
+      "lineOriginalView", "lineNameWrap", "lineNameInput", "lineMessageInput", "lineTranslatedCheck",
+      "btnLineCancel", "btnLineSave", "proofreadModal", "proofreadSearchInput", "proofreadScope",
+      "proofreadRegexCheck", "proofreadCaseCheck", "proofreadExactCheck", "proofreadTranslatedOnlyCheck",
+      "btnProofreadReset", "proofreadStatus", "proofreadContainer", "btnProofreadClose",
+      "proofreadReplaceInput", "btnProofreadReplaceAll", "rangeFromInput", "rangeToInput", "btnSelectRange"
     ];
     for (const id of ids) {
       ui[id] = document.getElementById(id);
@@ -144,28 +133,25 @@
     ui.btnBackToDashboard.addEventListener("click", closeProject);
     ui.btnRestoreProject.addEventListener("click", () => ui.restoreProjectInput.click());
     ui.restoreProjectInput.addEventListener("change", onRestoreProject);
-
     ui.btnImportFile.addEventListener("click", () => ui.importFileInput.click());
     ui.btnImportFolder.addEventListener("click", () => ui.importFolderInput.click());
     ui.btnImportZip.addEventListener("click", () => ui.importZipInput.click());
-    
     ui.importFileInput.addEventListener("change", onImportFileChange);
     ui.importFolderInput.addEventListener("change", onImportFolderChange);
     ui.importZipInput.addEventListener("change", onImportZipChange);
-    
     ui.btnExport.addEventListener("click", onExport);
     ui.btnCopyForAi.addEventListener("click", onCopyForAi);
     ui.btnApply.addEventListener("click", onApplyTranslation);
     ui.btnUndo.addEventListener("click", onUndoLastApply);
     ui.btnProofread.addEventListener("click", onOpenProofread);
-    
+
     ui.btnSelectAll.addEventListener("click", () => {
       state.lines.forEach(l => {
         if (!isTranslated(l)) state.selectedLines.add(l.line_num);
       });
       syncCheckboxUI();
     });
-    
+
     ui.btnClearSelection.addEventListener("click", () => {
       state.selectedLines.clear();
       syncCheckboxUI();
@@ -175,7 +161,6 @@
       const f = parseInt(ui.rangeFromInput.value);
       const t = parseInt(ui.rangeToInput.value);
       if (isNaN(f) || isNaN(t) || f > t) return alert("Range tidak valid.");
-      
       state.selectedLines.clear();
       for (let i = f; i <= t; i++) {
         const l = state.lineByNum.get(i);
@@ -184,10 +169,8 @@
       syncCheckboxUI();
 
       const targetIndex = state.displayRows.findIndex(row => row.type === "line" && row.line.line_num === f);
-      
       if (targetIndex !== -1) {
         mainScroller.scrollToIndex(targetIndex);
-        
         setTimeout(() => {
           const targetEl = document.querySelector(`input[data-num="${f}"]`);
           if (targetEl) {
@@ -196,9 +179,7 @@
             const originalBg = rowEl.style.backgroundColor;
             rowEl.style.transition = "background-color 0.3s ease";
             rowEl.style.backgroundColor = "rgba(59, 130, 246, 0.4)";
-            setTimeout(() => {
-              rowEl.style.backgroundColor = originalBg;
-            }, 800);
+            setTimeout(() => { rowEl.style.backgroundColor = originalBg; }, 800);
           }
         }, 50);
       }
@@ -208,7 +189,7 @@
     ui.btnSettingsReset.addEventListener("click", () => ui.settingsPromptInput.value = DEFAULT_PROMPT_HEADER);
     ui.btnSettingsCancel.addEventListener("click", () => closeModal(ui.settingsModal));
     ui.btnSettingsSave.addEventListener("click", onSavePromptSettings);
-    
+
     ui.btnLineCancel.addEventListener("click", () => closeModal(ui.lineEditorModal));
     ui.btnLineSave.addEventListener("click", onSaveLineEditor);
     ui.btnProofreadClose.addEventListener("click", () => closeModal(ui.proofreadModal));
@@ -241,7 +222,6 @@
     try {
       const root = await getOpfsRoot();
       const projects = [];
-      
       for await (const [name, handle] of root.entries()) {
         if (name.endsWith(PROJECT_EXT) && handle.kind === 'file') {
           const file = await handle.getFile();
@@ -259,14 +239,11 @@
           } catch(e) {}
         }
       }
-
       projects.sort((a, b) => b.updatedAt - a.updatedAt);
-
       if (projects.length === 0) {
         ui.projectList.innerHTML = `<p class="hint" style="grid-column: 1/-1;">Belum ada proyek. Klik "Buat Proyek Baru" untuk memulai.</p>`;
         return;
       }
-
       for (const p of projects) {
         const card = document.createElement("div");
         card.className = "project-card";
@@ -285,12 +262,10 @@
             <button class="btn btn-danger btn-sm btn-delete" data-id="${p.id}">Hapus</button>
           </div>
         `;
-        
         card.querySelector(".btn-open").addEventListener("click", () => openProject(p.id, p.data));
         card.querySelector(".btn-rename").addEventListener("click", () => renameDashboardProject(p.id, p.name, p.data));
         card.querySelector(".btn-backup").addEventListener("click", () => backupDashboardProject(p.name, p.data));
         card.querySelector(".btn-delete").addEventListener("click", () => deleteProject(p.id));
-        
         ui.projectList.appendChild(card);
       }
     } catch (err) {
@@ -301,7 +276,6 @@
   async function createNewProject() {
     const name = prompt("Masukkan nama proyek baru:");
     if (!name || !name.trim()) return;
-    
     const id = "proj_" + Date.now() + PROJECT_EXT;
     const initialData = {
       version: APP_VERSION,
@@ -311,14 +285,12 @@
       lines: [],
       prompt_header: DEFAULT_PROMPT_HEADER
     };
-
     try {
       const root = await getOpfsRoot();
       const fileHandle = await root.getFileHandle(id, { create: true });
       const writable = await fileHandle.createWritable();
       await writable.write(JSON.stringify(initialData));
       await writable.close();
-      
       openProject(id, initialData);
     } catch (e) {
       alert("Gagal membuat proyek: " + e.message);
@@ -339,7 +311,6 @@
   async function renameDashboardProject(id, oldName, data) {
     const newName = prompt("Masukkan nama baru untuk proyek:", oldName);
     if (!newName || newName.trim() === "" || newName === oldName) return;
-
     data.projectName = newName.trim();
     await saveProjectToOpfs(id, data);
     loadDashboardProjects();
@@ -348,10 +319,10 @@
   async function backupDashboardProject(name, data) {
     const strData = JSON.stringify(data);
     const b = new Blob([strData], { type: "application/json" });
-    const a = document.createElement("a"); 
-    a.href = URL.createObjectURL(b); 
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
     const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    a.download = `${safeName}_backup${PROJECT_EXT}`; 
+    a.download = `${safeName}_backup${PROJECT_EXT}`;
     a.click();
   }
 
@@ -395,11 +366,8 @@
     state.aiInstructionHeader = data.prompt_header || DEFAULT_PROMPT_HEADER;
     state.selectedLines.clear();
     state.undoSnapshot = null;
-    
     ui.projectNameDisplay.textContent = state.projectName;
-    
     refreshAll();
-    
     ui.dashboardView.classList.remove("open");
     ui.workspaceView.style.display = "flex";
   }
@@ -429,15 +397,13 @@
   }
 
   async function onRestoreProject(ev) {
-    const f = ev.target.files?.[0]; 
-    ev.target.value = ""; 
+    const f = ev.target.files?.[0];
+    ev.target.value = "";
     if (!f) return;
-    
     try {
       const p = JSON.parse(await f.text());
       const name = p.projectName || f.name.replace(PROJECT_EXT, '');
       const id = "proj_" + Date.now() + PROJECT_EXT;
-      
       const safeData = {
         version: APP_VERSION,
         projectName: name,
@@ -446,42 +412,37 @@
         lines: (p.lines || []).map(normalizeLineDict),
         prompt_header: p.prompt_header || DEFAULT_PROMPT_HEADER
       };
-
       await saveProjectToOpfs(id, safeData);
       loadDashboardProjects();
       alert(`Proyek "${name}" berhasil dipulihkan!`);
-    } catch (e) { 
-      alert("File backup korup atau tidak valid: " + e.message); 
+    } catch (e) {
+      alert("File backup korup atau tidak valid: " + e.message);
     }
   }
 
   function updateButtonStates() {
     const hasData = state.lines.length > 0;
     const hasSelection = state.selectedLines.size > 0;
-
     ui.btnExport.disabled = !hasData;
     ui.btnProofread.disabled = !hasData;
     ui.btnSelectAll.disabled = !hasData;
     ui.btnClearSelection.disabled = !hasSelection;
     ui.btnCopyForAi.disabled = !hasSelection;
-    
     ui.pasteArea.disabled = !hasData;
     ui.btnApply.disabled = !hasData;
-    
     ui.rangeFromInput.disabled = !hasData;
     ui.rangeToInput.disabled = !hasData;
     ui.btnSelectRange.disabled = !hasData;
-    
     ui.copyCount.textContent = state.selectedLines.size;
   }
 
-  function isTranslated(line) { 
-    return !!line.is_translated && !!String(line.trans_message).trim(); 
+  function isTranslated(line) {
+    return !!line.is_translated && !!String(line.trans_message).trim();
   }
 
   function normalizeLineDict(line) {
     return {
-      line_num: Number(line.line_num), 
+      line_num: Number(line.line_num),
       file: String(line.file),
       name: line.name == null ? null : String(line.name).replace(/\r?\n/g, "\\n").trim(),
       message: String(line.message).replace(/\r?\n/g, "\\n").trim(),
@@ -499,30 +460,29 @@
   function decodeArrayBuffer(buffer) {
     const encodings = ["utf-8", "shift_jis", "windows-31j"];
     for (const enc of encodings) {
-      try { return new TextDecoder(enc, { fatal: true }).decode(buffer); } 
+      try { return new TextDecoder(enc, { fatal: true }).decode(buffer); }
       catch (_) {}
     }
     return new TextDecoder("utf-8").decode(buffer);
   }
 
-  async function parseJsonFromFileObject(file) { 
-    return JSON.parse(decodeArrayBuffer(await file.arrayBuffer())); 
+  async function parseJsonFromFileObject(file) {
+    return JSON.parse(decodeArrayBuffer(await file.arrayBuffer()));
   }
 
   function parseJsonEntries(jsonArray, fileName, startLineNum) {
     if (!Array.isArray(jsonArray)) throw new Error(`File ${fileName} bukan array JSON.`);
     const lines = [];
     let currentLine = startLineNum;
-    
     for (const entry of jsonArray) {
       if (!entry || typeof entry !== "object" || !Object.hasOwn(entry, "message")) continue;
       lines.push({
-        line_num: currentLine++, 
+        line_num: currentLine++,
         file: fileName,
         name: entry.name == null ? null : String(entry.name).replace(/\r?\n/g, "\\n").trim(),
         message: String(entry.message ?? "").replace(/\r?\n/g, "\\n").trim(),
-        trans_name: null, 
-        trans_message: null, 
+        trans_name: null,
+        trans_message: null,
         is_translated: false,
       });
     }
@@ -532,13 +492,11 @@
   function rebuildDisplayState() {
     state.lineByNum.clear();
     const grouped = new Map(state.importedFiles.map(f => [f, []]));
-    
     for (const line of state.lines) {
       state.lineByNum.set(line.line_num, line);
       if (!grouped.has(line.file)) grouped.set(line.file, []);
       grouped.get(line.file).push(line);
     }
-    
     state.displayRows = [];
     for (const [fileName, rows] of grouped.entries()) {
       if (!rows.length) continue;
@@ -557,12 +515,10 @@
   function renderMainRow(rowData) {
     const row = document.createElement("div");
     row.className = "preview-row";
-    
     if (rowData.type === "separator") {
       row.classList.add("separator");
       const fileLines = state.lines.filter(l => l.file === rowData.file && !isTranslated(l));
       const isAllSelected = fileLines.length > 0 && fileLines.every(l => state.selectedLines.has(l.line_num));
-
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.dataset.file = rowData.file;
@@ -575,44 +531,35 @@
         });
         syncCheckboxUI();
       });
-
-      const label = document.createElement("div"); 
+      const label = document.createElement("div");
       label.className = "mono grow";
-      label.style.fontWeight = "700"; 
+      label.style.fontWeight = "700";
       label.style.color = "var(--primary)";
       label.textContent = `File: ${rowData.file}`;
-      
       row.append(cb, label);
     } else {
       const line = rowData.line;
       if (isTranslated(line)) row.classList.add("row-translated");
-      
       const isChecked = state.selectedLines.has(line.line_num);
       if (isChecked) row.classList.add('row-selected');
-      
       const cbWrap = document.createElement("div");
       cbWrap.className = "checkbox-cell";
-      
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.dataset.num = line.line_num;
       cb.checked = isChecked;
       if (isTranslated(line)) cb.disabled = true;
-      
       cb.addEventListener("change", (e) => {
         if (e.target.checked) state.selectedLines.add(line.line_num);
         else state.selectedLines.delete(line.line_num);
         syncCheckboxUI();
       });
-
       const contentWrap = document.createElement("div");
       contentWrap.className = "text-content";
-      
       const origDiv = document.createElement("div");
       origDiv.className = "original";
       const dName = line.name || "";
       origDiv.textContent = dName ? `${line.line_num}. ${dName}: ${line.message}` : `${line.line_num}. ${line.message}`;
-      
       const transDiv = document.createElement("div");
       transDiv.className = "translated";
       let tTxt = "——";
@@ -623,11 +570,9 @@
           transDiv.classList.add("cell-muted");
       }
       transDiv.textContent = tTxt;
-      
       contentWrap.append(origDiv, transDiv);
       cbWrap.append(cb, contentWrap);
       row.appendChild(cbWrap);
-      
       contentWrap.addEventListener("click", () => openLineEditor(line.line_num));
     }
     return row;
@@ -638,32 +583,27 @@
       const fileLines = state.lines.filter(l => l.file === cb.dataset.file && !isTranslated(l));
       cb.checked = fileLines.length > 0 && fileLines.every(l => state.selectedLines.has(l.line_num));
     });
-    
     document.querySelectorAll('.preview-row:not(.separator) input[type="checkbox"]').forEach(cb => {
       const num = Number(cb.dataset.num);
       const isChecked = state.selectedLines.has(num);
       cb.checked = isChecked;
-      
       const row = cb.closest('.preview-row');
       if (isChecked) row.classList.add('row-selected');
       else row.classList.remove('row-selected');
     });
-
     updateButtonStates();
   }
 
   function renderNameTable() {
     const autoDetectedNames = Array.from(new Set(state.lines.map(l => l.name).filter(Boolean))).sort();
     ui.nameTableBody.textContent = "";
-    
     const frag = document.createDocumentFragment();
     for (const n of autoDetectedNames) {
       const tr = document.createElement("tr");
-      const td = document.createElement("td"); 
-      td.textContent = n; 
+      const td = document.createElement("td");
+      td.textContent = n;
       td.className = "mono";
       td.title = "Klik untuk copy nama ke clipboard";
-      
       td.addEventListener("click", async () => {
         try {
           await navigator.clipboard.writeText(n);
@@ -672,8 +612,7 @@
           alert("Gagal menyalin teks.");
         }
       });
-
-      tr.appendChild(td); 
+      tr.appendChild(td);
       frag.appendChild(tr);
     }
     ui.nameTableBody.appendChild(frag);
@@ -683,29 +622,27 @@
     const total = state.lines.length;
     const trans = state.lines.filter(isTranslated).length;
     const perc = total ? Math.floor((trans / total) * 100) : 0;
-    
     ui.statusBar.textContent = `File: ${state.importedFiles.length > 1 ? state.importedFiles.length + ' file' : (state.importedFiles[0] || '-')} | Baris: ${total} | TL: ${trans}/${total} (${perc}%)`;
     ui.progressFill.style.width = `${perc}%`;
     ui.progressText.textContent = `${trans}/${total}`;
   }
 
-  function refreshAll() { 
-    rebuildDisplayState(); 
+  function refreshAll() {
+    rebuildDisplayState();
     renderPreviewRows();
-    renderNameTable(); 
-    updateStatusBar(); 
-    ui.btnUndo.disabled = !state.undoSnapshot; 
+    renderNameTable();
+    updateStatusBar();
+    ui.btnUndo.disabled = !state.undoSnapshot;
   }
 
   function flashHint(msg, keepAlive = false) {
-    ui.copyStatus.textContent = msg; 
+    ui.copyStatus.textContent = msg;
     ui.copyStatus.classList.remove("empty");
-    
     const currentToken = ++hintToken;
     if (!keepAlive) {
-      setTimeout(() => { 
+      setTimeout(() => {
         if (hintToken === currentToken) {
-          ui.copyStatus.classList.add("empty"); 
+          ui.copyStatus.classList.add("empty");
         }
       }, 4000);
     }
@@ -714,14 +651,11 @@
   async function handleImportLogic(filesObj, isZip = false) {
     flashHint("Memproses file... Mohon tunggu.", true);
     document.body.style.cursor = "wait";
-    
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    
     try {
       let cur = 1, lines = [], fNames = [];
       let maxExistingLineNum = state.lines.length > 0 ? Math.max(...state.lines.map(l => l.line_num)) : 0;
       cur = maxExistingLineNum + 1;
-      
       const existingFiles = new Set(state.importedFiles);
       const skippedFiles = [];
 
@@ -736,11 +670,11 @@
           }
           const jsonContent = JSON.parse(decodeArrayBuffer(await zip.file(n).async("uint8array")));
           const p = parseJsonEntries(jsonContent, baseName, cur);
-          if (p.length) { 
-            fNames.push(baseName); 
+          if (p.length) {
+            fNames.push(baseName);
             existingFiles.add(baseName);
-            lines.push(...p); 
-            cur += p.length; 
+            lines.push(...p);
+            cur += p.length;
           }
           await new Promise(r => setTimeout(r, 0));
         }
@@ -755,34 +689,37 @@
             continue;
           }
           const p = parseJsonEntries(await parseJsonFromFileObject(f), baseName, cur);
-          if (p.length) { 
-            fNames.push(baseName); 
+          if (p.length) {
+            fNames.push(baseName);
             existingFiles.add(baseName);
-            lines.push(...p); 
-            cur += p.length; 
+            lines.push(...p);
+            cur += p.length;
           }
           await new Promise(r => setTimeout(r, 0));
         }
       }
-      
+
       if (lines.length > 0) {
         state.lines = [...state.lines, ...lines];
         state.importedFiles = Array.from(existingFiles);
         refreshAll();
         queueAutoSave();
-        
         let msg = `Berhasil impor ${lines.length} baris.`;
         if (skippedFiles.length > 0) {
           msg += ` (${skippedFiles.length} file duplikat diabaikan)`;
         }
         flashHint(msg);
       } else if (skippedFiles.length > 0) {
-        alert(`Gagal impor: File yang dipilih sudah ada di dalam proyek.\n\nFile duplikat:\n- ${skippedFiles.slice(0, 5).join('\n- ')}${skippedFiles.length > 5 ? '\n...dan lainnya' : ''}`);
+        ui.copyStatus.classList.add("empty");
+        setTimeout(() => {
+          alert(`Gagal impor: File yang dipilih sudah ada di dalam proyek.\n\nFile duplikat:\n- ${skippedFiles.slice(0, 5).join('\n- ')}${skippedFiles.length > 5 ? '\n...dan lainnya' : ''}`);
+        }, 10);
       } else {
         flashHint("Tidak ada data valid yang diimpor.", false);
       }
     } catch (err) {
-      alert(`Terjadi kesalahan saat mengimpor:\n${err.message}`); 
+      ui.copyStatus.classList.add("empty");
+      setTimeout(() => alert(`Terjadi kesalahan saat mengimpor:\n${err.message}`), 10);
     } finally {
       document.body.style.cursor = "default";
     }
@@ -791,37 +728,34 @@
   async function onImportFileChange(ev) {
     if(!ev.target.files.length) return;
     await handleImportLogic(ev.target.files);
-    ev.target.value = ""; 
+    ev.target.value = "";
   }
 
   async function onImportFolderChange(ev) {
     if(!ev.target.files.length) return;
     await handleImportLogic(ev.target.files);
-    ev.target.value = ""; 
+    ev.target.value = "";
   }
 
   async function onImportZipChange(ev) {
     if(!ev.target.files.length) return;
     await handleImportLogic(ev.target.files[0], true);
-    ev.target.value = ""; 
+    ev.target.value = "";
   }
 
   async function onCopyForAi() {
     const sel = state.lines.filter(l => state.selectedLines.has(l.line_num));
-    const out = []; 
-    
+    const out = [];
     for (const l of sel) {
       const dN = l.name || "";
       out.push(dN ? `${l.line_num}. ${dN}: ${l.message}` : `${l.line_num}. ${l.message}`);
     }
-    
     const p = `${(state.aiInstructionHeader || DEFAULT_PROMPT_HEADER).trim()}\n\n${out.join("\n")}\n`;
-    
-    try { 
-      await navigator.clipboard.writeText(p); 
-      flashHint(`Disalin ${sel.length} baris.`); 
+    try {
+      await navigator.clipboard.writeText(p);
+      flashHint(`Disalin ${sel.length} baris.`);
     } catch (_) {
-      ui.pasteArea.value = p; 
+      ui.pasteArea.value = p;
     }
   }
 
@@ -832,39 +766,35 @@
     const expectedCount = state.selectedLines.size;
 
     for (let i = 0; i < rawLines.length; i++) {
-      const txt = rawLines[i].trim(); 
+      const txt = rawLines[i].trim();
       if (!txt) continue;
-      
       const match = txt.match(/^\s*(\d+)\s*[.)]\s*(.*)$/);
-      if (!match) { 
-        errors.push(`[Baris ${i+1}] Format rusak (Harus "Angka. Teks") -> "${txt.substring(0,25)}..."`); 
-        continue; 
+      if (!match) {
+        errors.push(`[Baris ${i+1}] Format rusak (Harus "Angka. Teks") -> "${txt.substring(0,25)}..."`);
+        continue;
       }
-      
       const num = Number(match[1]);
       if (seen.has(num)) errors.push(`[#${num}] Duplikat nomor baris.`);
       seen.add(num);
-      
+
       let name = null;
       let msg = match[2].trim();
       const rawMsg = msg;
-      
       const colonIdx = msg.indexOf(':');
       const jpColonIdx = msg.indexOf('：');
       let splitIdx = -1;
-      
+
       if (colonIdx !== -1 && jpColonIdx !== -1) splitIdx = Math.min(colonIdx, jpColonIdx);
       else if (colonIdx !== -1) splitIdx = colonIdx;
       else if (jpColonIdx !== -1) splitIdx = jpColonIdx;
-      
+
       if (splitIdx !== -1) {
         name = msg.substring(0, splitIdx).trim();
         msg = msg.substring(splitIdx + 1).trim();
       }
-      
       parsed.push({ num, name, msg, rawMsg });
     }
-    
+
     if (!parsed.length && !errors.length) return alert("Teks di kotak kosong atau tidak valid.");
 
     if (parsed.length > 0) {
@@ -883,49 +813,43 @@
     for (const it of parsed) {
       const l = state.lineByNum.get(it.num);
       if (!l) { errors.push(`[#${it.num}] Tidak ada di JSON asli.`); continue; }
-      
       const oN = !!(l.name || "").trim();
       let tN = !!(it.name || "").trim();
-      
       if (!oN && tN) { it.msg = it.rawMsg; it.name = null; tN = false; }
-      
       if (oN && !tN) errors.push(`[#${it.num}] Nama karakter hilang.`);
       else if (!oN && tN) errors.push(`[#${it.num}] Tiba-tiba ada nama karakter.`);
       else if (!it.msg) errors.push(`[#${it.num}] Pesannya kosong.`);
       else updates.push({ l, it });
     }
-    
+
     if (errors.length) {
       return alert("TRANSLASI DITOLAK:\n\n" + errors.slice(0, 10).join("\n") + (errors.length > 10 ? `\n\n... (+${errors.length-10} error lain)` : ""));
     }
-    
+
     state.undoSnapshot = { lines: JSON.parse(JSON.stringify(state.lines)) };
-    
     for (const {l, it} of updates) {
-      l.trans_message = it.msg; 
+      l.trans_message = it.msg;
       l.is_translated = true;
-      if (it.name) l.trans_name = it.name; 
+      if (it.name) l.trans_name = it.name;
       state.selectedLines.delete(l.line_num);
     }
-    
-    ui.pasteArea.value = ""; 
-    refreshAll(); 
-    queueAutoSave(); 
+    ui.pasteArea.value = "";
+    refreshAll();
+    queueAutoSave();
     flashHint(`${updates.length} baris sukses diterapkan.`);
   }
 
-  function onUndoLastApply() { 
-    if (!state.undoSnapshot) return; 
-    state.lines = state.undoSnapshot.lines.map(normalizeLineDict); 
-    state.undoSnapshot = null; 
-    refreshAll(); 
-    queueAutoSave(); 
+  function onUndoLastApply() {
+    if (!state.undoSnapshot) return;
+    state.lines = state.undoSnapshot.lines.map(normalizeLineDict);
+    state.undoSnapshot = null;
+    refreshAll();
+    queueAutoSave();
   }
 
   function openLineEditor(num) {
-    const l = state.lineByNum.get(num); 
+    const l = state.lineByNum.get(num);
     if (!l) return;
-    
     activeLineEditorLineNum = num;
     ui.lineEditorTitle.textContent = `Edit Baris ${num}`;
     ui.lineOriginalView.value = l.name ? `${l.name}: ${l.message}` : `${l.message}`;
@@ -933,38 +857,33 @@
     ui.lineNameInput.value = l.name ? (l.trans_name || "") : "";
     if (l.name) ui.lineNameInput.placeholder = l.name;
     ui.lineMessageInput.value = (l.trans_message || "").trim();
-    ui.lineTranslatedCheck.checked = isTranslated(l); 
-    
+    ui.lineTranslatedCheck.checked = isTranslated(l);
     openModal(ui.lineEditorModal);
   }
 
   function onSaveLineEditor() {
-    const l = state.lineByNum.get(activeLineEditorLineNum); 
+    const l = state.lineByNum.get(activeLineEditorLineNum);
     if (!l) return;
-    
     const m = ui.lineMessageInput.value.trim().replace(/\r?\n/g, "\\n");
     if (ui.lineTranslatedCheck.checked && !m) return alert("Gagal: Pesan terjemahan kosong.");
-
     let n = null;
     if (l.name) n = ui.lineNameInput.value.trim().replace(/\r?\n/g, "\\n");
-    
-    l.trans_message = m || null; 
+    l.trans_message = m || null;
     l.is_translated = !!(ui.lineTranslatedCheck.checked && m);
-    if (l.name) l.trans_name = n || null; 
-    
-    closeModal(ui.lineEditorModal); 
-    refreshAll(); 
-    if (ui.proofreadModal.classList.contains("open")) renderProofreadResults(); 
+    if (l.name) l.trans_name = n || null;
+    closeModal(ui.lineEditorModal);
+    refreshAll();
+    if (ui.proofreadModal.classList.contains("open")) renderProofreadResults();
     queueAutoSave();
   }
 
   function onOpenProofread() { openModal(ui.proofreadModal); renderProofreadResults(); }
-  function onResetProofread() { 
+  function onResetProofread() {
     ui.proofreadSearchInput.value = ""; ui.proofreadReplaceInput.value = "";
     ui.proofreadScope.value = "all"; ui.proofreadRegexCheck.checked = false;
     ui.proofreadCaseCheck.checked = false; ui.proofreadExactCheck.checked = false;
-    ui.proofreadTranslatedOnlyCheck.checked = true; 
-    renderProofreadResults(); 
+    ui.proofreadTranslatedOnlyCheck.checked = true;
+    renderProofreadResults();
   }
 
   function createHighlightedNodes(text, query, isRegex, isCase, isExact) {
@@ -975,11 +894,10 @@
       if (isExact) regexStr = `\\b(?:${regexStr})\\b`;
       regex = new RegExp(`(${regexStr})`, isCase ? 'g' : 'gi');
     } catch(e) { return document.createTextNode(text); }
-    
     const frag = document.createDocumentFragment();
     const parts = text.split(regex);
     for (let i = 0; i < parts.length; i++) {
-      if (i % 2 === 1) { 
+      if (i % 2 === 1) {
         const mark = document.createElement("mark");
         mark.className = "highlight"; mark.textContent = parts[i];
         frag.appendChild(mark);
@@ -992,35 +910,29 @@
 
   function renderProofreadResults() {
     if (!ui.proofreadModal.classList.contains("open")) return;
-    const query = ui.proofreadSearchInput.value; 
-    const isRegex = ui.proofreadRegexCheck.checked; 
-    const isCase = ui.proofreadCaseCheck.checked; 
+    const query = ui.proofreadSearchInput.value;
+    const isRegex = ui.proofreadRegexCheck.checked;
+    const isCase = ui.proofreadCaseCheck.checked;
     const isExact = ui.proofreadExactCheck.checked;
     const onlyTrans = ui.proofreadTranslatedOnlyCheck.checked;
     const scope = ui.proofreadScope.value;
-    
-    let regex = null; 
-    if (query) { 
-      try { 
+    let regex = null;
+    if (query) {
+      try {
         let regexStr = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         if (isExact) regexStr = `\\b(?:${regexStr})\\b`;
-        regex = new RegExp(regexStr, isCase ? "g" : "gi"); 
-      } 
-      catch (e) { return; } 
+        regex = new RegExp(regexStr, isCase ? "g" : "gi");
+      }
+      catch (e) { return; }
     }
-    
     state.proofreadMatches = [];
-    
     for (const line of state.lines) {
       if (onlyTrans && !isTranslated(line)) continue;
-      
       const dName = line.name || "";
       let fName = null;
       if (isTranslated(line)) fName = (line.trans_name || "").trim() || line.name;
-      
       const targetMsg = onlyTrans ? line.trans_message : line.message;
       const targetName = onlyTrans ? fName : dName;
-      
       if (query && regex) {
         let isMatch = false;
         regex.lastIndex = 0;
@@ -1029,26 +941,23 @@
         if (!isMatch && (scope === 'all' || scope === 'name') && targetName && regex.test(targetName)) isMatch = true;
         if (!isMatch) continue;
       }
-      
-      state.proofreadMatches.push({ 
-        num: line.line_num, file: line.file, origName: dName, origMsg: line.message, 
+      state.proofreadMatches.push({
+        num: line.line_num, file: line.file, origName: dName, origMsg: line.message,
         transName: fName, transMsg: line.trans_message, isTrans: isTranslated(line)
       });
     }
-    
     ui.proofreadStatus.textContent = `Ditemukan ${state.proofreadMatches.length} baris.`;
     proofreadScroller.setItems(state.proofreadMatches);
   }
 
   function renderProofreadRow(r) {
-    const row = document.createElement("div"); 
+    const row = document.createElement("div");
     row.className = "preview-row";
-    const contentWrap = document.createElement("div"); 
+    const contentWrap = document.createElement("div");
     contentWrap.className = "text-content";
-    
-    const query = ui.proofreadSearchInput.value; 
-    const isRegex = ui.proofreadRegexCheck.checked; 
-    const isCase = ui.proofreadCaseCheck.checked; 
+    const query = ui.proofreadSearchInput.value;
+    const isRegex = ui.proofreadRegexCheck.checked;
+    const isCase = ui.proofreadCaseCheck.checked;
     const isExact = ui.proofreadExactCheck.checked;
     const onlyTrans = ui.proofreadTranslatedOnlyCheck.checked;
     const scope = ui.proofreadScope.value;
@@ -1066,17 +975,16 @@
       else wrap.appendChild(document.createTextNode(msg));
       return wrap;
     };
-    
-    const fileMeta = document.createElement("div"); 
+
+    const fileMeta = document.createElement("div");
     fileMeta.className = "file-meta";
     fileMeta.textContent = `File: ${r.file} | Baris: ${r.num}`;
-    
-    const origDiv = document.createElement("div"); 
+    const origDiv = document.createElement("div");
     origDiv.className = "original";
-    const transDiv = document.createElement("div"); 
+    const transDiv = document.createElement("div");
     transDiv.className = "translated";
     if (!r.isTrans) transDiv.classList.add("cell-muted");
-    
+
     if (onlyTrans) {
       origDiv.textContent = r.origName ? `${r.origName}: ${r.origMsg}` : r.origMsg;
       if (r.isTrans) transDiv.appendChild(buildNodes(r.transName, r.transMsg, true));
@@ -1086,19 +994,17 @@
       if (r.isTrans) transDiv.textContent = r.transName ? `${r.transName}: ${r.transMsg}` : r.transMsg;
       else transDiv.textContent = "——";
     }
-    
+
     contentWrap.append(fileMeta, origDiv, transDiv);
     row.appendChild(contentWrap);
     contentWrap.addEventListener("click", () => openLineEditor(r.num));
-    
     return row;
   }
 
   function onProofreadReplaceAll() {
     const query = ui.proofreadSearchInput.value;
     if (!query) return alert("Pencarian masih kosong!");
-    
-    const rep = ui.proofreadReplaceInput.value; 
+    const rep = ui.proofreadReplaceInput.value;
     const isRegex = ui.proofreadRegexCheck.checked;
     const isCase = ui.proofreadCaseCheck.checked;
     const isExact = ui.proofreadExactCheck.checked;
@@ -1150,38 +1056,36 @@
 
   function onOpenSettings() { ui.settingsPromptInput.value = state.aiInstructionHeader; openModal(ui.settingsModal); }
   function onSavePromptSettings() { state.aiInstructionHeader = ui.settingsPromptInput.value.trim(); closeModal(ui.settingsModal); queueAutoSave(); }
-  
+
   async function onExport() {
     if (!state.lines.length) return;
-    const g = new Map(); 
-    for (const l of state.lines) { 
-      if (!g.has(l.file)) g.set(l.file, []); 
-      g.get(l.file).push(l); 
+    const g = new Map();
+    for (const l of state.lines) {
+      if (!g.has(l.file)) g.set(l.file, []);
+      g.get(l.file).push(l);
     }
-    
     const res = Array.from(g.entries()).map(([fn, lns]) => ({
-      fn: `${fn}.json`, 
+      fn: `${fn}.json`,
       content: JSON.stringify(lns.map(l => {
-        const e = {}; 
+        const e = {};
         e.name = isTranslated(l) ? (l.trans_name || l.name) : l.name;
         e.message = isTranslated(l) ? l.trans_message : l.message;
-        if (e.name) e.name = e.name.replace(/\\n/g, "\n"); 
+        if (e.name) e.name = e.name.replace(/\\n/g, "\n");
         if (e.message) e.message = e.message.replace(/\\n/g, "\n");
         return e;
       }), null, 2)
     }));
-    
     if (window.JSZip && res.length > 1) {
-      const zip = new window.JSZip(); 
+      const zip = new window.JSZip();
       res.forEach(f => zip.file(f.fn, f.content));
       const b = await zip.generateAsync({ type: "blob" });
-      const a = document.createElement("a"); 
+      const a = document.createElement("a");
       a.href = URL.createObjectURL(b); const safeName = state.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'export';
       a.download = `${safeName}_export.zip`; a.click();
     } else {
       res.forEach(f => {
         const b = new Blob([f.content], { type: "application/json" });
-        const a = document.createElement("a"); 
+        const a = document.createElement("a");
         a.href = URL.createObjectURL(b); a.download = f.fn; a.click();
       });
     }
