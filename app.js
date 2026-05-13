@@ -3,6 +3,7 @@
   const DEFAULT_PROMPT_HEADER = `Rewrite entire text to Native Indonesian. Do not change prefix number. Euphemism prohibited. Use of "Bahasa Jakarta Selatan" is prohibited. Put results inside plaintext block.`;
   const APP_VERSION = 5;
   const PROJECT_EXT = ".cstl";
+  
   const state = {
     currentProjectId: null,
     projectName: "",
@@ -18,6 +19,7 @@
     lineByNum: new Map(),
     proofreadMatches: [],
   };
+  
   const ui = {};
   let activeLineEditorLineNum = null;
   let saveTimeout = null;
@@ -38,6 +40,7 @@
       this.scrollTop = 0;
       this.ticking = false;
       this.lastStart = -1;
+      this.lastEnd = -1;
       
       this.onScroll = this.onScroll.bind(this);
       this.viewport.addEventListener('scroll', this.onScroll, { passive: true });
@@ -54,6 +57,7 @@
       this.updatePositions();
       this.scrollTop = this.viewport.scrollTop = 0;
       this.lastStart = -1;
+      this.lastEnd = -1;
       this.render(true);
     }
 
@@ -100,7 +104,7 @@
           low = mid + 1;
         }
       }
-      return 0;
+      return Math.max(0, Math.min(low, this.items.length - 1));
     }
 
     render(force = false) {
@@ -111,13 +115,9 @@
         return;
       }
 
-      const buffer = 20; 
+      const buffer = 15; 
       let targetStart = this.findStartIndex() - Math.floor(buffer / 2);
       targetStart = Math.max(0, targetStart);
-
-      if (!force && this.lastStart !== -1 && Math.abs(targetStart - this.lastStart) < 6) {
-        return;
-      }
 
       let end = targetStart;
       let currentHeight = 0;
@@ -125,11 +125,16 @@
         currentHeight += this.heights[end];
         end++;
       }
-      end = Math.min(total, end + Math.floor(buffer / 2));
-      let start = targetStart;
-      this.lastStart = start;
+      end = Math.min(total, end);
 
-      const topPad = this.positions[start];
+      if (!force && this.lastStart === targetStart && this.lastEnd === end) {
+        return;
+      }
+
+      this.lastStart = targetStart;
+      this.lastEnd = end;
+
+      const topPad = this.positions[targetStart];
       const bottomPad = end < total ? this.totalHeight - this.positions[end] : 0;
 
       this.container.innerHTML = "";
@@ -140,7 +145,7 @@
 
       const frag = document.createDocumentFragment();
       const rowElements = [];
-      for (let i = start; i < end; i++) {
+      for (let i = targetStart; i < end; i++) {
         const el = this.renderItem(this.items[i]);
         el.dataset.vindex = i;
         frag.appendChild(el);
@@ -156,14 +161,24 @@
         let changed = false;
         for (const el of rowElements) {
           const idx = parseInt(el.dataset.vindex);
-          const actualHeight = el.offsetHeight ? el.offsetHeight + 8 : this.heights[idx];
-          if (actualHeight > 8 && actualHeight !== this.heights[idx]) {
-            this.heights[idx] = actualHeight;
-            changed = true;
+          const rect = el.getBoundingClientRect();
+          if (rect.height > 0) {
+            const actualHeight = rect.height + 8;
+            if (Math.abs(actualHeight - this.heights[idx]) > 1) {
+              this.heights[idx] = actualHeight;
+              changed = true;
+            }
           }
         }
         if (changed) {
           this.updatePositions();
+          if (this.container.firstElementChild) {
+             this.container.firstElementChild.style.height = `${this.positions[this.lastStart]}px`;
+          }
+          if (this.container.lastElementChild) {
+             const updatedBottomPad = this.lastEnd < this.items.length ? this.totalHeight - this.positions[this.lastEnd] : 0;
+             this.container.lastElementChild.style.height = `${updatedBottomPad}px`;
+          }
         }
       });
     }
@@ -173,9 +188,13 @@
     cacheElements();
     initScrollers();
     bindEvents();
+    
     if (!navigator.storage || !navigator.storage.getDirectory) {
       alert("Browser kamu tidak mendukung Sistem File OPFS. Beberapa fitur tidak akan berjalan optimal.");
+      ui.projectList.innerHTML = `<p class="hint" style="grid-column: 1/-1; color: var(--danger);">Browser tidak mendukung OPFS. Sistem penyimpanan tidak dapat diakses.</p>`;
+      return; 
     }
+    
     await loadDashboardProjects();
   });
 
@@ -318,6 +337,7 @@
         ui.projectList.innerHTML = `<p class="hint" style="grid-column: 1/-1;">Belum ada proyek. Klik "Buat Proyek Baru" untuk memulai.</p>`;
         return;
       }
+      
       for (const p of projects) {
         const card = document.createElement("div");
         card.className = "project-card";
@@ -325,8 +345,8 @@
         let typeBadge = '';
         if (p.fileCount > 0 || p.lineCount > 0) {
           typeBadge = p.data.projectType === 'epub' 
-            ? `<span style="background:var(--primary);color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;display:inline-block;">EPUB</span>` 
-            : `<span style="background:var(--success);color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;display:inline-block;">JSON VNTP</span>`;
+            ? `<span class="badge badge-epub">EPUB</span>` 
+            : `<span class="badge badge-json">JSON VNTP</span>`;
         }
 
         card.innerHTML = `
@@ -728,7 +748,13 @@
     const total = state.lines.length;
     const trans = state.lines.filter(isTranslated).length;
     const perc = total ? Math.floor((trans / total) * 100) : 0;
-    ui.statusBar.textContent = `Mode: ${state.projectType.toUpperCase()} | File: ${state.importedFiles.length > 1 ? state.importedFiles.length + ' file' : (state.importedFiles[0] || '-')} | Baris: ${total} | TL: ${trans}/${total} (${perc}%)`;
+    
+    let modeText = "-";
+    if (state.importedFiles.length > 0) {
+      modeText = state.projectType === "epub" ? "EPUB" : "JSON VNTP";
+    }
+
+    ui.statusBar.textContent = `Mode: ${modeText} | File: ${state.importedFiles.length > 1 ? state.importedFiles.length + ' file' : (state.importedFiles[0] || '-')} | Baris: ${total} | TL: ${trans}/${total} (${perc}%)`;
     ui.progressFill.style.width = `${perc}%`;
     ui.progressText.textContent = `${trans}/${total}`;
   }
@@ -759,7 +785,7 @@
     document.body.style.cursor = "wait";
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     try {
-      let cur = 1, lines = [], fNames = [];
+      let cur = 1, lines = [];
       let maxExistingLineNum = state.lines.length > 0 ? Math.max(...state.lines.map(l => l.line_num)) : 0;
       cur = maxExistingLineNum + 1;
       const existingFiles = new Set(state.importedFiles);
@@ -777,7 +803,6 @@
           const jsonContent = JSON.parse(decodeArrayBuffer(await zip.file(n).async("uint8array")));
           const p = parseJsonEntries(jsonContent, baseName, cur);
           if (p.length) {
-            fNames.push(baseName);
             existingFiles.add(baseName);
             lines.push(...p);
             cur += p.length;
@@ -857,7 +882,6 @@
               }
               if (fileHasContent) {
                 existingFiles.add(href);
-                fNames.push(href);
               }
               await new Promise(r => setTimeout(r, 0));
             }
@@ -869,7 +893,6 @@
             }
             const p = parseJsonEntries(await parseJsonFromFileObject(f), baseName, cur);
             if (p.length) {
-              fNames.push(baseName);
               existingFiles.add(baseName);
               lines.push(...p);
               cur += p.length;
