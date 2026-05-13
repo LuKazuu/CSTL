@@ -1,13 +1,14 @@
 (() => {
   "use strict";
-
   const DEFAULT_PROMPT_HEADER = `Rewrite entire text to Native Indonesian. Do not change prefix number. Euphemism prohibited. Use of "Bahasa Jakarta Selatan" is prohibited. Put results inside plaintext block.`;
-  const APP_VERSION = 4;
+  const APP_VERSION = 5;
   const PROJECT_EXT = ".cstl";
-
   const state = {
     currentProjectId: null,
     projectName: "",
+    projectType: "json",
+    epubTags: "p",
+    epubSourceId: null,
     lines: [],
     importedFiles: [],
     aiInstructionHeader: DEFAULT_PROMPT_HEADER,
@@ -17,7 +18,6 @@
     lineByNum: new Map(),
     proofreadMatches: [],
   };
-
   const ui = {};
   let activeLineEditorLineNum = null;
   let saveTimeout = null;
@@ -32,32 +32,78 @@
       this.estimatedHeight = estimatedHeight;
       this.renderItem = renderItem;
       this.items = [];
+      this.heights = [];
+      this.positions = [];
+      this.totalHeight = 0;
       this.scrollTop = 0;
+      this.ticking = false;
+      this.lastStart = -1;
+      
       this.onScroll = this.onScroll.bind(this);
       this.viewport.addEventListener('scroll', this.onScroll, { passive: true });
       if (window.ResizeObserver) {
-        new ResizeObserver(() => this.render()).observe(this.viewport);
+        new ResizeObserver(() => {
+          if (this.viewport.clientHeight > 0) this.render(true);
+        }).observe(this.viewport);
       }
     }
 
     setItems(items) {
       this.items = items;
+      this.heights = new Array(items.length).fill(this.estimatedHeight);
+      this.updatePositions();
       this.scrollTop = this.viewport.scrollTop = 0;
-      this.render();
+      this.lastStart = -1;
+      this.render(true);
+    }
+
+    updatePositions() {
+      let top = 0;
+      this.positions = new Array(this.items.length);
+      for (let i = 0; i < this.items.length; i++) {
+        this.positions[i] = top;
+        top += this.heights[i];
+      }
+      this.totalHeight = top;
     }
 
     scrollToIndex(index) {
-      this.viewport.scrollTop = index * this.estimatedHeight;
+      if (index < 0 || index >= this.items.length) return;
+      this.viewport.scrollTop = this.positions[index];
       this.scrollTop = this.viewport.scrollTop;
-      this.render();
+      this.render(true);
     }
 
     onScroll() {
-      this.scrollTop = this.viewport.scrollTop;
-      this.render();
+      if (!this.ticking) {
+        window.requestAnimationFrame(() => {
+          this.scrollTop = this.viewport.scrollTop;
+          this.render();
+          this.ticking = false;
+        });
+        this.ticking = true;
+      }
     }
 
-    render() {
+    findStartIndex() {
+      let low = 0;
+      let high = this.items.length - 1;
+      while (low <= high) {
+        let mid = Math.floor((low + high) / 2);
+        let midTop = this.positions[mid];
+        let midBottom = midTop + this.heights[mid];
+        if (this.scrollTop >= midTop && this.scrollTop < midBottom) {
+          return mid;
+        } else if (this.scrollTop < midTop) {
+          high = mid - 1;
+        } else {
+          low = mid + 1;
+        }
+      }
+      return 0;
+    }
+
+    render(force = false) {
       const viewportHeight = this.viewport.clientHeight || 800;
       const total = this.items.length;
       if (!total) {
@@ -65,29 +111,61 @@
         return;
       }
 
-      const buffer = 15;
-      let start = Math.floor(this.scrollTop / this.estimatedHeight) - buffer;
-      start = Math.max(0, start);
-      let end = Math.ceil((this.scrollTop + viewportHeight) / this.estimatedHeight) + buffer;
-      end = Math.min(total, end);
+      const buffer = 20; 
+      let targetStart = this.findStartIndex() - Math.floor(buffer / 2);
+      targetStart = Math.max(0, targetStart);
 
-      const topPad = start * this.estimatedHeight;
-      const bottomPad = (total - end) * this.estimatedHeight;
+      if (!force && this.lastStart !== -1 && Math.abs(targetStart - this.lastStart) < 6) {
+        return;
+      }
+
+      let end = targetStart;
+      let currentHeight = 0;
+      while (end < total && currentHeight < viewportHeight + (buffer * this.estimatedHeight)) {
+        currentHeight += this.heights[end];
+        end++;
+      }
+      end = Math.min(total, end + Math.floor(buffer / 2));
+      let start = targetStart;
+      this.lastStart = start;
+
+      const topPad = this.positions[start];
+      const bottomPad = end < total ? this.totalHeight - this.positions[end] : 0;
 
       this.container.innerHTML = "";
+      
       const topSpacer = document.createElement("div");
       topSpacer.style.height = `${topPad}px`;
       this.container.appendChild(topSpacer);
 
       const frag = document.createDocumentFragment();
+      const rowElements = [];
       for (let i = start; i < end; i++) {
-        frag.appendChild(this.renderItem(this.items[i]));
+        const el = this.renderItem(this.items[i]);
+        el.dataset.vindex = i;
+        frag.appendChild(el);
+        rowElements.push(el);
       }
       this.container.appendChild(frag);
 
       const bottomSpacer = document.createElement("div");
       bottomSpacer.style.height = `${bottomPad}px`;
       this.container.appendChild(bottomSpacer);
+
+      Promise.resolve().then(() => {
+        let changed = false;
+        for (const el of rowElements) {
+          const idx = parseInt(el.dataset.vindex);
+          const actualHeight = el.offsetHeight ? el.offsetHeight + 8 : this.heights[idx];
+          if (actualHeight > 8 && actualHeight !== this.heights[idx]) {
+            this.heights[idx] = actualHeight;
+            changed = true;
+          }
+        }
+        if (changed) {
+          this.updatePositions();
+        }
+      });
     }
   }
 
@@ -109,8 +187,8 @@
       "previewViewport", "previewContainer", "progressFill", "progressText", "btnSelectAll",
       "btnClearSelection", "copyCount", "btnCopyForAi", "copyStatus", "pasteArea", "btnApply",
       "btnUndo", "nameTableBody", "statusBar", "importFileInput", "importFolderInput",
-      "importZipInput", "settingsModal", "settingsPromptInput", "btnSettingsReset",
-      "btnSettingsCancel", "btnSettingsSave", "lineEditorModal", "lineEditorTitle",
+      "importZipInput", "settingsModal", "settingsPromptInput", "settingsEpubTagsInput",
+      "btnSettingsReset", "btnSettingsCancel", "btnSettingsSave", "lineEditorModal", "lineEditorTitle",
       "lineOriginalView", "lineNameWrap", "lineNameInput", "lineMessageInput", "lineTranslatedCheck",
       "btnLineCancel", "btnLineSave", "proofreadModal", "proofreadSearchInput", "proofreadScope",
       "proofreadRegexCheck", "proofreadCaseCheck", "proofreadExactCheck", "proofreadTranslatedOnlyCheck",
@@ -144,19 +222,16 @@
     ui.btnApply.addEventListener("click", onApplyTranslation);
     ui.btnUndo.addEventListener("click", onUndoLastApply);
     ui.btnProofread.addEventListener("click", onOpenProofread);
-
     ui.btnSelectAll.addEventListener("click", () => {
       state.lines.forEach(l => {
         if (!isTranslated(l)) state.selectedLines.add(l.line_num);
       });
       syncCheckboxUI();
     });
-
     ui.btnClearSelection.addEventListener("click", () => {
       state.selectedLines.clear();
       syncCheckboxUI();
     });
-
     ui.btnSelectRange.addEventListener("click", () => {
       const f = parseInt(ui.rangeFromInput.value);
       const t = parseInt(ui.rangeToInput.value);
@@ -167,7 +242,6 @@
         if (l && !isTranslated(l)) state.selectedLines.add(i);
       }
       syncCheckboxUI();
-
       const targetIndex = state.displayRows.findIndex(row => row.type === "line" && row.line.line_num === f);
       if (targetIndex !== -1) {
         mainScroller.scrollToIndex(targetIndex);
@@ -184,18 +258,18 @@
         }, 50);
       }
     });
-
     ui.btnSettings.addEventListener("click", onOpenSettings);
-    ui.btnSettingsReset.addEventListener("click", () => ui.settingsPromptInput.value = DEFAULT_PROMPT_HEADER);
+    ui.btnSettingsReset.addEventListener("click", () => {
+      ui.settingsPromptInput.value = DEFAULT_PROMPT_HEADER;
+      ui.settingsEpubTagsInput.value = "p";
+    });
     ui.btnSettingsCancel.addEventListener("click", () => closeModal(ui.settingsModal));
     ui.btnSettingsSave.addEventListener("click", onSavePromptSettings);
-
     ui.btnLineCancel.addEventListener("click", () => closeModal(ui.lineEditorModal));
     ui.btnLineSave.addEventListener("click", onSaveLineEditor);
     ui.btnProofreadClose.addEventListener("click", () => closeModal(ui.proofreadModal));
     ui.btnProofreadReset.addEventListener("click", onResetProofread);
     ui.btnProofreadReplaceAll.addEventListener("click", onProofreadReplaceAll);
-
     const debouncedSearch = debounce(renderProofreadResults, 250);
     ui.proofreadSearchInput.addEventListener("input", debouncedSearch);
     ui.proofreadScope.addEventListener("change", renderProofreadResults);
@@ -247,10 +321,19 @@
       for (const p of projects) {
         const card = document.createElement("div");
         card.className = "project-card";
+        
+        let typeBadge = '';
+        if (p.fileCount > 0 || p.lineCount > 0) {
+          typeBadge = p.data.projectType === 'epub' 
+            ? `<span style="background:var(--primary);color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;display:inline-block;">EPUB</span>` 
+            : `<span style="background:var(--success);color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;display:inline-block;">JSON VNTP</span>`;
+        }
+
         card.innerHTML = `
           <div>
             <h3>${p.name}</h3>
             <div class="project-meta mt-2">
+              ${typeBadge ? `<div style="margin-bottom: 8px;">${typeBadge}</div>` : ''}
               Terakhir diubah: ${new Date(p.updatedAt).toLocaleString('id-ID')}<br>
               File: ${p.fileCount} | Baris: ${p.lineCount}
             </div>
@@ -265,7 +348,7 @@
         card.querySelector(".btn-open").addEventListener("click", () => openProject(p.id, p.data));
         card.querySelector(".btn-rename").addEventListener("click", () => renameDashboardProject(p.id, p.name, p.data));
         card.querySelector(".btn-backup").addEventListener("click", () => backupDashboardProject(p.name, p.data));
-        card.querySelector(".btn-delete").addEventListener("click", () => deleteProject(p.id));
+        card.querySelector(".btn-delete").addEventListener("click", () => deleteProject(p.id, p.data));
         ui.projectList.appendChild(card);
       }
     } catch (err) {
@@ -280,6 +363,9 @@
     const initialData = {
       version: APP_VERSION,
       projectName: name.trim(),
+      projectType: "json",
+      epubTags: "p",
+      epubSourceId: null,
       updatedAt: Date.now(),
       imported_files: [],
       lines: [],
@@ -297,10 +383,13 @@
     }
   }
 
-  async function deleteProject(id) {
+  async function deleteProject(id, data) {
     if (!confirm("Hapus proyek ini secara permanen?")) return;
     try {
       const root = await getOpfsRoot();
+      if (data.epubSourceId) {
+        try { await root.removeEntry(data.epubSourceId); } catch(e) {}
+      }
       await root.removeEntry(id);
       loadDashboardProjects();
     } catch (e) {
@@ -346,6 +435,9 @@
       const data = {
         version: APP_VERSION,
         projectName: state.projectName,
+        projectType: state.projectType,
+        epubTags: state.epubTags,
+        epubSourceId: state.epubSourceId,
         imported_files: state.importedFiles,
         lines: state.lines,
         prompt_header: state.aiInstructionHeader
@@ -361,15 +453,20 @@
   function openProject(id, data) {
     state.currentProjectId = id;
     state.projectName = data.projectName || "Unknown Project";
+    state.projectType = data.projectType || "json";
+    state.epubTags = data.epubTags || "p";
+    state.epubSourceId = data.epubSourceId || null;
     state.lines = (data.lines || []).map(normalizeLineDict);
     state.importedFiles = data.imported_files || [];
     state.aiInstructionHeader = data.prompt_header || DEFAULT_PROMPT_HEADER;
     state.selectedLines.clear();
     state.undoSnapshot = null;
     ui.projectNameDisplay.textContent = state.projectName;
-    refreshAll();
+    
     ui.dashboardView.classList.remove("open");
     ui.workspaceView.style.display = "flex";
+    
+    refreshAll();
   }
 
   function closeProject() {
@@ -377,6 +474,7 @@
       clearTimeout(saveTimeout);
       const data = {
         version: APP_VERSION, projectName: state.projectName,
+        projectType: state.projectType, epubTags: state.epubTags, epubSourceId: state.epubSourceId,
         imported_files: state.importedFiles, lines: state.lines,
         prompt_header: state.aiInstructionHeader
       };
@@ -407,6 +505,9 @@
       const safeData = {
         version: APP_VERSION,
         projectName: name,
+        projectType: p.projectType || "json",
+        epubTags: p.epubTags || "p",
+        epubSourceId: p.epubSourceId || null,
         updatedAt: Date.now(),
         imported_files: p.imported_files || [],
         lines: (p.lines || []).map(normalizeLineDict),
@@ -508,7 +609,12 @@
   }
 
   function renderPreviewRows() {
-    mainScroller.setItems(state.displayRows);
+    if (mainScroller.items && mainScroller.items.length === state.displayRows.length && mainScroller.items.length > 0) {
+      mainScroller.items = state.displayRows;
+      mainScroller.render(true);
+    } else {
+      mainScroller.setItems(state.displayRows);
+    }
     updateButtonStates();
   }
 
@@ -622,7 +728,7 @@
     const total = state.lines.length;
     const trans = state.lines.filter(isTranslated).length;
     const perc = total ? Math.floor((trans / total) * 100) : 0;
-    ui.statusBar.textContent = `File: ${state.importedFiles.length > 1 ? state.importedFiles.length + ' file' : (state.importedFiles[0] || '-')} | Baris: ${total} | TL: ${trans}/${total} (${perc}%)`;
+    ui.statusBar.textContent = `Mode: ${state.projectType.toUpperCase()} | File: ${state.importedFiles.length > 1 ? state.importedFiles.length + ' file' : (state.importedFiles[0] || '-')} | Baris: ${total} | TL: ${trans}/${total} (${perc}%)`;
     ui.progressFill.style.width = `${perc}%`;
     ui.progressText.textContent = `${trans}/${total}`;
   }
@@ -679,23 +785,97 @@
           await new Promise(r => setTimeout(r, 0));
         }
       } else {
-        const files = Array.from(filesObj)
-          .filter(f => f.name.endsWith(".json"))
-          .sort((a,b) => a.name.localeCompare(b.name));
+        const files = Array.from(filesObj).sort((a,b) => a.name.localeCompare(b.name));
         for (const f of files) {
-          const baseName = normalizeFileBaseName(f.name);
-          if (existingFiles.has(baseName)) {
-            skippedFiles.push(baseName);
-            continue;
+          const isEpub = f.name.toLowerCase().endsWith(".epub");
+          const isJson = f.name.toLowerCase().endsWith(".json");
+          
+          if (isEpub) {
+            if (state.lines.length > 0 && state.projectType === "epub") {
+              alert("Proyek ini sudah memuat file EPUB. Buat proyek baru untuk mengimpor EPUB lain.");
+              continue;
+            }
+            if (state.lines.length === 0) {
+              state.projectType = "epub";
+              state.epubSourceId = "epub_" + Date.now() + ".epub";
+            }
+            
+            const root = await getOpfsRoot();
+            const fh = await root.getFileHandle(state.epubSourceId, { create: true });
+            const writable = await fh.createWritable();
+            await writable.write(f);
+            await writable.close();
+
+            const zip = await window.JSZip.loadAsync(f);
+            const containerXml = await zip.file("META-INF/container.xml").async("text");
+            const rootfile = new DOMParser().parseFromString(containerXml, "application/xml").querySelector("rootfile");
+            const opfPath = decodeURIComponent(rootfile.getAttribute("full-path"));
+            const opfDir = opfPath.includes("/") ? opfPath.substring(0, opfPath.lastIndexOf("/")) + "/" : "";
+            
+            const opfXml = await zip.file(opfPath).async("text");
+            const opfDoc = new DOMParser().parseFromString(opfXml, "application/xml");
+            
+            const manifest = {};
+            Array.from(opfDoc.querySelectorAll("manifest > item")).forEach(item => {
+              manifest[item.getAttribute("id")] = decodeURIComponent(item.getAttribute("href"));
+            });
+            
+            const spineHrefs = Array.from(opfDoc.querySelectorAll("spine > itemref")).map(ref => {
+              const idref = ref.getAttribute("idref");
+              return manifest[idref] ? opfDir + manifest[idref] : null;
+            }).filter(Boolean);
+
+            const tagsSelector = state.epubTags || "p";
+
+            for (const href of spineHrefs) {
+              if (existingFiles.has(href)) {
+                skippedFiles.push(href);
+                continue;
+              }
+              const fileEntry = zip.file(href);
+              if (!fileEntry) continue;
+              
+              const html = await fileEntry.async("text");
+              const doc = new DOMParser().parseFromString(html, href.endsWith('.xhtml') ? "application/xhtml+xml" : "text/html");
+              const els = Array.from(doc.querySelectorAll(tagsSelector));
+              
+              let fileHasContent = false;
+              for (const el of els) {
+                const text = el.textContent.replace(/\r?\n/g, " ").trim();
+                if (text) {
+                  lines.push({
+                    line_num: cur++,
+                    file: href,
+                    name: null,
+                    message: text,
+                    trans_name: null,
+                    trans_message: null,
+                    is_translated: false
+                  });
+                  fileHasContent = true;
+                }
+              }
+              if (fileHasContent) {
+                existingFiles.add(href);
+                fNames.push(href);
+              }
+              await new Promise(r => setTimeout(r, 0));
+            }
+          } else if (isJson) {
+            const baseName = normalizeFileBaseName(f.name);
+            if (existingFiles.has(baseName)) {
+              skippedFiles.push(baseName);
+              continue;
+            }
+            const p = parseJsonEntries(await parseJsonFromFileObject(f), baseName, cur);
+            if (p.length) {
+              fNames.push(baseName);
+              existingFiles.add(baseName);
+              lines.push(...p);
+              cur += p.length;
+            }
+            await new Promise(r => setTimeout(r, 0));
           }
-          const p = parseJsonEntries(await parseJsonFromFileObject(f), baseName, cur);
-          if (p.length) {
-            fNames.push(baseName);
-            existingFiles.add(baseName);
-            lines.push(...p);
-            cur += p.length;
-          }
-          await new Promise(r => setTimeout(r, 0));
         }
       }
 
@@ -764,7 +944,6 @@
     const rawLines = ui.pasteArea.value.split(/\r?\n/);
     const parsed = [], errors = [], seen = new Set();
     const expectedCount = state.selectedLines.size;
-
     for (let i = 0; i < rawLines.length; i++) {
       const txt = rawLines[i].trim();
       if (!txt) continue;
@@ -776,27 +955,22 @@
       const num = Number(match[1]);
       if (seen.has(num)) errors.push(`[#${num}] Duplikat nomor baris.`);
       seen.add(num);
-
       let name = null;
       let msg = match[2].trim();
       const rawMsg = msg;
       const colonIdx = msg.indexOf(':');
       const jpColonIdx = msg.indexOf('：');
       let splitIdx = -1;
-
       if (colonIdx !== -1 && jpColonIdx !== -1) splitIdx = Math.min(colonIdx, jpColonIdx);
       else if (colonIdx !== -1) splitIdx = colonIdx;
       else if (jpColonIdx !== -1) splitIdx = jpColonIdx;
-
       if (splitIdx !== -1) {
         name = msg.substring(0, splitIdx).trim();
         msg = msg.substring(splitIdx + 1).trim();
       }
       parsed.push({ num, name, msg, rawMsg });
     }
-
     if (!parsed.length && !errors.length) return alert("Teks di kotak kosong atau tidak valid.");
-
     if (parsed.length > 0) {
       if (parsed.length !== expectedCount) {
         errors.push(`[Validasi Checkbox] Copy ${expectedCount} baris, tapi yang di-paste ${parsed.length} baris.`);
@@ -808,7 +982,6 @@
         if (!state.selectedLines.has(num)) errors.push(`[#${num}] Nyasar, baris ini tidak kamu centang sebelumnya.`);
       }
     }
-
     const updates = [];
     for (const it of parsed) {
       const l = state.lineByNum.get(it.num);
@@ -821,11 +994,9 @@
       else if (!it.msg) errors.push(`[#${it.num}] Pesannya kosong.`);
       else updates.push({ l, it });
     }
-
     if (errors.length) {
       return alert("TRANSLASI DITOLAK:\n\n" + errors.slice(0, 10).join("\n") + (errors.length > 10 ? `\n\n... (+${errors.length-10} error lain)` : ""));
     }
-
     state.undoSnapshot = { lines: JSON.parse(JSON.stringify(state.lines)) };
     for (const {l, it} of updates) {
       l.trans_message = it.msg;
@@ -963,7 +1134,6 @@
     const scope = ui.proofreadScope.value;
     const highlightName = scope === 'all' || scope === 'name';
     const highlightMsg = scope === 'all' || scope === 'message';
-
     const buildNodes = (name, msg, shouldHighlightAll) => {
       const wrap = document.createDocumentFragment();
       if (name) {
@@ -975,7 +1145,6 @@
       else wrap.appendChild(document.createTextNode(msg));
       return wrap;
     };
-
     const fileMeta = document.createElement("div");
     fileMeta.className = "file-meta";
     fileMeta.textContent = `File: ${r.file} | Baris: ${r.num}`;
@@ -984,7 +1153,6 @@
     const transDiv = document.createElement("div");
     transDiv.className = "translated";
     if (!r.isTrans) transDiv.classList.add("cell-muted");
-
     if (onlyTrans) {
       origDiv.textContent = r.origName ? `${r.origName}: ${r.origMsg}` : r.origMsg;
       if (r.isTrans) transDiv.appendChild(buildNodes(r.transName, r.transMsg, true));
@@ -994,7 +1162,6 @@
       if (r.isTrans) transDiv.textContent = r.transName ? `${r.transName}: ${r.transMsg}` : r.transMsg;
       else transDiv.textContent = "——";
     }
-
     contentWrap.append(fileMeta, origDiv, transDiv);
     row.appendChild(contentWrap);
     contentWrap.addEventListener("click", () => openLineEditor(r.num));
@@ -1010,17 +1177,14 @@
     const isExact = ui.proofreadExactCheck.checked;
     const onlyTrans = ui.proofreadTranslatedOnlyCheck.checked;
     const scope = ui.proofreadScope.value;
-
     let regex;
     try {
       let regexStr = isRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (isExact) regexStr = `\\b(?:${regexStr})\\b`;
       regex = new RegExp(regexStr, isCase ? 'g' : 'gi');
     } catch(e) { return alert("Format Regex tidak valid."); }
-
     let count = 0;
     state.undoSnapshot = { lines: JSON.parse(JSON.stringify(state.lines)) };
-
     for (const line of state.lines) {
       if (onlyTrans) {
         if (!isTranslated(line)) continue;
@@ -1047,47 +1211,128 @@
         if (replaced) count++;
       }
     }
-
     if (count > 0) {
       refreshAll(); renderProofreadResults(); queueAutoSave();
       alert(`Berhasil melakukan Replace All pada ${count} baris teks.`);
     } else alert(`Tidak ada kata yang cocok dengan pencarian.`);
   }
 
-  function onOpenSettings() { ui.settingsPromptInput.value = state.aiInstructionHeader; openModal(ui.settingsModal); }
-  function onSavePromptSettings() { state.aiInstructionHeader = ui.settingsPromptInput.value.trim(); closeModal(ui.settingsModal); queueAutoSave(); }
+  function onOpenSettings() {
+    ui.settingsPromptInput.value = state.aiInstructionHeader;
+    ui.settingsEpubTagsInput.value = state.epubTags || "p";
+    openModal(ui.settingsModal);
+  }
+
+  function onSavePromptSettings() {
+    state.aiInstructionHeader = ui.settingsPromptInput.value.trim();
+    state.epubTags = ui.settingsEpubTagsInput.value.trim() || "p";
+    closeModal(ui.settingsModal);
+    queueAutoSave();
+  }
 
   async function onExport() {
     if (!state.lines.length) return;
-    const g = new Map();
-    for (const l of state.lines) {
-      if (!g.has(l.file)) g.set(l.file, []);
-      g.get(l.file).push(l);
-    }
-    const res = Array.from(g.entries()).map(([fn, lns]) => ({
-      fn: `${fn}.json`,
-      content: JSON.stringify(lns.map(l => {
-        const e = {};
-        e.name = isTranslated(l) ? (l.trans_name || l.name) : l.name;
-        e.message = isTranslated(l) ? l.trans_message : l.message;
-        if (e.name) e.name = e.name.replace(/\\n/g, "\n");
-        if (e.message) e.message = e.message.replace(/\\n/g, "\n");
-        return e;
-      }), null, 2)
-    }));
-    if (window.JSZip && res.length > 1) {
-      const zip = new window.JSZip();
-      res.forEach(f => zip.file(f.fn, f.content));
-      const b = await zip.generateAsync({ type: "blob" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(b); const safeName = state.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'export';
-      a.download = `${safeName}_export.zip`; a.click();
-    } else {
-      res.forEach(f => {
-        const b = new Blob([f.content], { type: "application/json" });
+    
+    if (state.projectType === "epub" && state.epubSourceId) {
+      try {
+        flashHint("Membangun file EPUB...", true);
+        document.body.style.cursor = "wait";
+        const root = await getOpfsRoot();
+        const fh = await root.getFileHandle(state.epubSourceId);
+        const f = await fh.getFile();
+        const zip = await window.JSZip.loadAsync(f);
+        
+        const linesByFile = {};
+        state.lines.forEach(l => {
+          if (!linesByFile[l.file]) linesByFile[l.file] = [];
+          linesByFile[l.file].push(l);
+        });
+
+        const tagsSelector = state.epubTags || "p";
+
+        for (const [href, fLines] of Object.entries(linesByFile)) {
+          const zf = zip.file(href);
+          if (!zf) continue;
+          const html = await zf.async("text");
+          const xmlMatch = html.match(/^<\?xml.*?\?>/i);
+          const xmlHeader = xmlMatch ? xmlMatch[0] + "\n" : "";
+          const doc = new DOMParser().parseFromString(html, href.endsWith('.xhtml') ? "application/xhtml+xml" : "text/html");
+          const els = Array.from(doc.querySelectorAll(tagsSelector));
+          
+          let lineIdx = 0;
+          for (const el of els) {
+            if (el.textContent.replace(/\r?\n/g, " ").trim() === "") continue;
+            const l = fLines[lineIdx++];
+            if (l && l.is_translated && l.trans_message) {
+              el.textContent = l.trans_message;
+            }
+          }
+          
+          let newHtml = new XMLSerializer().serializeToString(doc);
+          if (xmlHeader && !newHtml.startsWith("<?xml")) {
+            newHtml = xmlHeader + newHtml;
+          }
+          zip.file(href, newHtml);
+        }
+
+        if (zip.file("mimetype")) {
+          const mimeData = await zip.file("mimetype").async("text");
+          zip.file("mimetype", mimeData, { compression: "STORE" });
+        }
+
+        const blob = await zip.generateAsync({
+          type: "blob",
+          mimeType: "application/epub+zip",
+          compression: "DEFLATE",
+          compressionOptions: { level: 9 }
+        });
+
         const a = document.createElement("a");
-        a.href = URL.createObjectURL(b); a.download = f.fn; a.click();
-      });
+        a.href = URL.createObjectURL(blob);
+        const safeName = state.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'export';
+        a.download = `${safeName}_tl.epub`;
+        a.click();
+        flashHint("Berhasil mengekspor EPUB!");
+      } catch (err) {
+        alert("Gagal mengekspor EPUB: " + err.message);
+      } finally {
+        document.body.style.cursor = "default";
+      }
+    } else {
+      const g = new Map();
+      for (const l of state.lines) {
+        if (!g.has(l.file)) g.set(l.file, []);
+        g.get(l.file).push(l);
+      }
+      const res = Array.from(g.entries()).map(([fn, lns]) => ({
+        fn: `${fn.replace(/\.xhtml|\.html/g, '')}.json`,
+        content: JSON.stringify(lns.map(l => {
+          const e = {};
+          e.name = isTranslated(l) ? (l.trans_name || l.name) : l.name;
+          e.message = isTranslated(l) ? l.trans_message : l.message;
+          if (e.name) e.name = e.name.replace(/\\n/g, "\n");
+          if (e.message) e.message = e.message.replace(/\\n/g, "\n");
+          return e;
+        }), null, 2)
+      }));
+      if (window.JSZip && res.length > 1) {
+        const zip = new window.JSZip();
+        res.forEach(f => zip.file(f.fn, f.content));
+        const b = await zip.generateAsync({ type: "blob" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(b);
+        const safeName = state.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'export';
+        a.download = `${safeName}_export.zip`;
+        a.click();
+      } else {
+        res.forEach(f => {
+          const b = new Blob([f.content], { type: "application/json" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(b);
+          a.download = f.fn;
+          a.click();
+        });
+      }
     }
   }
 
