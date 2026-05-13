@@ -7,7 +7,7 @@
   const state = {
     currentProjectId: null,
     projectName: "",
-    projectType: "json",
+    projectType: "",
     epubTags: "p",
     epubSourceId: null,
     lines: [],
